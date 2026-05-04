@@ -1,0 +1,110 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "anyllm"
+version = "0.1.0"
+description = "通用大模型网关核心库 — 支持 OpenAI / Anthropic / Gemini / Bedrock / Ollama 等 LLM API 的无损互转"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+    { name = "AnyLLM Contributors" },
+]
+keywords = [
+    "llm",
+    "openai",
+    "anthropic",
+    "gemini",
+    "bedrock",
+    "ollama",
+    "gateway",
+    "adapter",
+    "universal",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Typing :: Typed",
+]
+dependencies = [
+    "pydantic>=2.7.0",
+]
+
+[project.optional-dependencies]
+# 调用 provider API 时需要 httpx（ImageResolutionInterceptor 和 Gateway HTTP 调用）
+http = [
+    "httpx>=0.27.0",
+]
+# 开发依赖
+dev = [
+    "httpx>=0.27.0",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.5.0",
+]
+# 完整安装（包含所有可选依赖）
+all = [
+    "httpx>=0.27.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/yang208115/anyllm"
+Documentation = "https://github.com/yang208115/anyllm#readme"
+Repository = "https://github.com/yang208115/anyllm"
+Issues = "https://github.com/yang208115/anyllm/issues"
+
+# =====================================================================
+# Hatch 构建配置
+# =====================================================================
+[tool.hatch.build.targets.wheel]
+packages = ["anyllm"]
+
+# =====================================================================
+# Ruff 代码风格检查
+# =====================================================================
+[tool.ruff]
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "UP",   # pyupgrade
+    "B",    # flake8-bugbear
+    "SIM",  # flake8-simplify
+]
+ignore = [
+    "E501",  # 行长度由 line-length 控制
+    "B008",  # 不限制函数默认参数中的函数调用
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["anyllm"]
+
+# =====================================================================
+# Pytest 配置
+# =====================================================================
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+# =====================================================================
+# Mypy 类型检查
+# =====================================================================
+[tool.mypy]
+python_version = "3.10"
+strict = true
+plugins = ["pydantic.mypy"]
