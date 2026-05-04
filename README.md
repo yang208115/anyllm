@@ -328,6 +328,22 @@ anyllm/
 - **httpx** — 异步 HTTP 客户端（可选，用于 API 调用和图片下载）
 - **asyncio** — 原生异步支持
 
+## 文档
+
+完整的开发文档位于 [`docs/`](docs/) 目录：
+
+| 文档 | 内容 |
+|------|------|
+| [文档索引](docs/index.md) | 文档导航与核心概念速查 |
+| [快速上手](docs/quickstart.md) | 安装、配置、4 个使用场景 |
+| [架构设计](docs/architecture.md) | 整体架构、核心组件、数据流、设计原则 |
+| [UIR 模型参考](docs/uir-reference.md) | 所有 Pydantic 模型的完整字段参考 |
+| [适配器开发指南](docs/adapters.md) | 如何编写新的 provider 适配器 |
+| [拦截器开发指南](docs/interceptors.md) | 自定义拦截器的三种方式 |
+| [网关使用指南](docs/gateway.md) | AnyLLMGateway 完整 API |
+| [转换警告参考](docs/warnings.md) | 所有 warning code 与处理策略 |
+| [能力矩阵](docs/capabilities.md) | L0/L1/L2 能力分层与 provider 对照表 |
+
 ## 路线图
 
 - [x] UIR 核心数据模型（9 种 ContentBlock）
