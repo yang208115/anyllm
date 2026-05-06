@@ -223,6 +223,16 @@ class RateLimiter(BaseInterceptor):
         return request
 ```
 
+## 示例脚本
+
+- `example/01_convert_openai_to_anthropic.py`：OpenAI 请求转换为 Anthropic 请求
+- `example/02_step_by_step_conversion.py`：分步执行 request/response 转换
+- `example/03_uir_with_tools.py`：UIR 下的 tool call / tool result
+- `example/04_custom_interceptor.py`：自定义拦截器
+- `example/05_gateway_convert_only.py`：Gateway 仅转换模式
+- `example/06_gateway_call_api.py`：Gateway 非流式 API 调用
+- `example/07_gateway_stream_events.py`：Gateway 流式事件消费（OpenAI / Anthropic）
+
 ## 核心架构
 
 ### UIR 数据模型
@@ -360,13 +370,9 @@ anyllm/
 - [x] 自定义拦截器（FunctionInterceptor + @decorator）
 - [x] AnyLLMGateway 网关入口
 - [x] Google Gemini 适配器
-- [ ] Amazon Bedrock Converse 适配器
-- [ ] Ollama OpenAI-compatible 适配器
-- [ ] OpenAI Responses API 适配器
-- [ ] Cloudflare Workers AI 适配器
-- [ ] 流式响应（UniversalStreamEvent）
+- [x] 流式响应（UniversalStreamEvent，已支持 OpenAI/Anthropic 网关流式事件）
 - [ ] 完整测试套件（L0/L1/L2 验收）
 
 ## License
 
-MIT
+GPL V3.0

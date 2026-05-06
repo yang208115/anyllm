@@ -139,7 +139,7 @@ class GeminiAdapter(BaseAdapter):
             tool_choice=tool_choice,
             response_format=response_format,
             generation=generation,
-            stream=False,
+            stream=bool(raw_request.get("stream", False)),
             vendor={"google": vendor} if vendor else {},
         )
         return ConversionResult(value=uir, warnings=warnings)

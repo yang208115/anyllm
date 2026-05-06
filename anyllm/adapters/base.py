@@ -40,6 +40,7 @@ from pydantic import BaseModel, ConfigDict
 
 from anyllm.schema.request import UniversalRequest
 from anyllm.schema.response import UniversalResponse
+from anyllm.schema.stream import UniversalStreamEvent
 from anyllm.schema.warnings import ConversionResult
 
 # =====================================================================
@@ -266,6 +267,48 @@ class BaseAdapter(ABC):
               .warnings : 转换过程中产生的警告
         """
         ...
+
+    def stream_provider_to_uir(
+        self,
+        raw_event: dict[str, Any],
+    ) -> ConversionResult[list[UniversalStreamEvent]]:
+        """
+        将 provider 原始流式事件转换为 UIR UniversalStreamEvent 列表。
+
+        默认实现返回 error warning，子类按 provider 事件格式覆盖实现。
+        """
+        return ConversionResult(
+            value=[],
+            warnings=[
+                self._stream_not_supported_warning("provider_to_uir")
+            ],
+        )
+
+    def stream_uir_to_provider(
+        self,
+        event: UniversalStreamEvent,
+    ) -> ConversionResult[list[dict[str, Any]]]:
+        """
+        将 UIR UniversalStreamEvent 转换为 provider 原始流式事件列表。
+
+        默认实现返回 error warning，子类按 provider 事件格式覆盖实现。
+        """
+        return ConversionResult(
+            value=[],
+            warnings=[
+                self._stream_not_supported_warning("uir_to_provider")
+            ],
+        )
+
+    def _stream_not_supported_warning(self, direction: str):
+        from anyllm.schema.warnings import ConversionWarning
+
+        return ConversionWarning(
+            code="STREAMING_NOT_SUPPORTED",
+            path=f"stream.{direction}",
+            message=f"{self.provider_name} 适配器未实现流式事件转换。",
+            severity="error",
+        )
 
 
 # =====================================================================

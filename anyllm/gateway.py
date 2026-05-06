@@ -52,8 +52,9 @@ AnyLLMGateway — 网关入口（PRD §13 + 用户需求 Step 5）。
 
 from __future__ import annotations
 
+import json
 import logging
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -61,6 +62,7 @@ from anyllm.adapters.base import BaseAdapter, BaseInterceptor
 from anyllm.conversion.converter import UniversalConverter
 from anyllm.schema.request import UniversalRequest
 from anyllm.schema.response import UniversalResponse
+from anyllm.schema.stream import UniversalStreamEvent
 from anyllm.schema.warnings import ConversionResult, ConversionWarning
 
 logger = logging.getLogger("anyllm.gateway")
@@ -427,6 +429,35 @@ class AnyLLMGateway:
         # UIR → provider 请求
         return self._converter.uir_to_request(target, processed)
 
+    async def chat_completions_stream(
+        self,
+        request: UniversalRequest,
+        *,
+        provider: str | None = None,
+        http_client: Any | None = None,
+    ) -> AsyncIterator[UniversalStreamEvent]:
+        """
+        执行流式聊天补全请求，逐个产出 UniversalStreamEvent。
+        """
+        target = self._canonicalize_provider(provider) if provider else self._resolve_provider(request)
+        config = self._providers[target]
+
+        if target == "google":
+            raise ValueError("google provider 当前未实现 UniversalStreamEvent 流式链路。")
+
+        processed = await self._converter.run_interceptors(request, target)
+        convert_result = self._converter.uir_to_request(target, processed)
+        raw_request = convert_result.value
+
+        stream_flag = bool(raw_request.get("stream", False))
+        if not stream_flag:
+            raise ValueError("流式接口要求请求包含 stream=True。")
+
+        async for raw_event in self._stream_provider_api(config, raw_request, http_client=http_client):
+            converted = self._converter.stream_event_to_uir(target, raw_event)
+            for event in converted.value:
+                yield event
+
     # ------------------------------------------------------------------
     # HTTP 调用
     # ------------------------------------------------------------------
@@ -487,6 +518,66 @@ class AnyLLMGateway:
 
         response.raise_for_status()
         return response.json()
+
+    async def _stream_provider_api(
+        self,
+        config: ProviderConfig,
+        raw_request: dict[str, Any],
+        http_client: Any | None = None,
+    ) -> AsyncIterator[dict[str, Any]]:
+        try:
+            import httpx
+        except ImportError as err:
+            raise ImportError(
+                "httpx 是调用 provider API 的必要依赖，请安装: pip install httpx"
+            ) from err
+
+        url, headers = self._build_request_params(config, raw_request)
+        payload = raw_request
+        if "google" in config.adapter.provider_name and "model" in raw_request:
+            payload = {k: v for k, v in raw_request.items() if k != "model"}
+
+        if http_client is not None and hasattr(http_client, "stream"):
+            async with http_client.stream("POST", url, json=payload, headers=headers) as response:
+                response.raise_for_status()
+                async for event in self._iter_sse_events(response.aiter_lines()):
+                    yield event
+            return
+
+        async with httpx.AsyncClient(timeout=config.timeout) as client, client.stream(
+            "POST", url, json=payload, headers=headers
+        ) as response:
+            response.raise_for_status()
+            async for event in self._iter_sse_events(response.aiter_lines()):
+                yield event
+
+    async def _iter_sse_events(self, lines: AsyncIterator[str]) -> AsyncIterator[dict[str, Any]]:
+        buffer: list[str] = []
+        async for line in lines:
+            if line == "":
+                if buffer:
+                    payload = "\n".join(buffer)
+                    buffer = []
+                    if payload == "[DONE]":
+                        yield {"_sse_done": True}
+                        continue
+                    try:
+                        yield json.loads(payload)
+                    except json.JSONDecodeError:
+                        yield {
+                            "type": "error",
+                            "data": {
+                                "message": "invalid_sse_json",
+                                "payload": payload,
+                            },
+                        }
+                continue
+
+            if line.startswith(":"):
+                continue
+
+            if line.startswith("data:"):
+                buffer.append(line[5:].lstrip())
 
     def _build_request_params(
         self,

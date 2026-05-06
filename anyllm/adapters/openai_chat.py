@@ -79,6 +79,7 @@ from anyllm.schema.request import (
     UniversalRequest,
 )
 from anyllm.schema.response import UniversalResponse, normalize_stop_reason
+from anyllm.schema.stream import UniversalStreamEvent
 from anyllm.schema.tools import (
     AutoToolChoice,
     JsonObjectResponseFormat,
@@ -335,6 +336,150 @@ class OpenAIChatAdapter(BaseAdapter):
         )
 
         return ConversionResult(value=response, warnings=warnings)
+
+    def stream_provider_to_uir(
+        self,
+        raw_event: dict[str, Any],
+    ) -> ConversionResult[list[UniversalStreamEvent]]:
+        warnings: list[ConversionWarning] = []
+        events: list[UniversalStreamEvent] = []
+
+        if raw_event.get("_sse_done"):
+            events.append(
+                UniversalStreamEvent(
+                    type="message_completed",
+                    raw=raw_event,
+                )
+            )
+            events.append(
+                UniversalStreamEvent(
+                    type="response_completed",
+                    usage=None,
+                    raw=raw_event,
+                )
+            )
+            return ConversionResult(value=events, warnings=warnings)
+
+        choices = raw_event.get("choices") or []
+        if not choices:
+            usage = raw_event.get("usage") or {}
+            if usage:
+                events.append(
+                    UniversalStreamEvent(
+                        type="response_completed",
+                        usage=Usage(
+                            input_tokens=usage.get("prompt_tokens"),
+                            output_tokens=usage.get("completion_tokens"),
+                            total_tokens=usage.get("total_tokens"),
+                            provider=usage,
+                        ),
+                        raw=raw_event,
+                    )
+                )
+            else:
+                warnings.append(
+                    ConversionWarning(
+                        code="STREAM_EVENT_DOWNGRADED",
+                        path="choices",
+                        message="OpenAI 流事件缺少 choices，已忽略。",
+                        severity="info",
+                    )
+                )
+            return ConversionResult(value=events, warnings=warnings)
+
+        for choice in choices:
+            index = choice.get("index")
+            delta = choice.get("delta") or {}
+            finish_reason = choice.get("finish_reason")
+            response_id = raw_event.get("id")
+
+            if delta.get("role") == "assistant":
+                events.append(
+                    UniversalStreamEvent(
+                        type="response_started",
+                        response_id=response_id,
+                        index=index,
+                        raw=raw_event,
+                    )
+                )
+                events.append(
+                    UniversalStreamEvent(
+                        type="message_started",
+                        response_id=response_id,
+                        index=index,
+                        raw=raw_event,
+                    )
+                )
+
+            text_delta = delta.get("content")
+            if text_delta:
+                events.append(
+                    UniversalStreamEvent(
+                        type="content_delta",
+                        response_id=response_id,
+                        index=index,
+                        delta=TextBlock(text=text_delta),
+                        raw=raw_event,
+                    )
+                )
+
+            for tc in delta.get("tool_calls") or []:
+                fn = tc.get("function") or {}
+                tool_id = tc.get("id") or f"call_{index}_{tc.get('index', 0)}"
+                tool_name = fn.get("name") or ""
+                arg_delta = fn.get("arguments")
+
+                if tool_name:
+                    events.append(
+                        UniversalStreamEvent(
+                            type="tool_call_started",
+                            response_id=response_id,
+                            index=index,
+                            tool_call=ToolCall(
+                                id=tool_id,
+                                name=tool_name,
+                                arguments={},
+                                raw_arguments="",
+                            ),
+                            raw=raw_event,
+                        )
+                    )
+
+                if arg_delta:
+                    events.append(
+                        UniversalStreamEvent(
+                            type="tool_call_delta",
+                            response_id=response_id,
+                            index=index,
+                            tool_call=ToolCall(
+                                id=tool_id,
+                                name=tool_name or "",
+                                arguments={},
+                                raw_arguments=arg_delta,
+                            ),
+                            raw=raw_event,
+                        )
+                    )
+
+            if finish_reason:
+                events.append(
+                    UniversalStreamEvent(
+                        type="message_completed",
+                        response_id=response_id,
+                        index=index,
+                        raw=raw_event,
+                    )
+                )
+                events.append(
+                    UniversalStreamEvent(
+                        type="response_completed",
+                        response_id=response_id,
+                        index=index,
+                        raw=raw_event,
+                    )
+                )
+
+        return ConversionResult(value=events, warnings=warnings)
 
     # ==================================================================
     # uir_to_request: UIR UniversalRequest → OpenAI Chat dict

@@ -1,6 +1,6 @@
 # AnyLLM 开发文档
 
-欢迎阅读 AnyLLM 的开发文档。AnyLLM 是一个通用大模型网关核心库，提供 provider-neutral 的语义层（UIR），支持 OpenAI / Anthropic / Gemini / Bedrock / Ollama 等 LLM API 之间的无损互转。
+欢迎阅读 AnyLLM 的开发文档。AnyLLM 是一个通用大模型网关核心库，提供 provider-neutral 的语义层（UIR），支持 OpenAI / Anthropic / Gemini 等 LLM API 之间的无损互转。
 
 ## 文档索引
 

@@ -39,6 +39,7 @@ from typing import Any
 from anyllm.adapters.base import BaseAdapter, BaseInterceptor
 from anyllm.schema.request import UniversalRequest
 from anyllm.schema.response import UniversalResponse
+from anyllm.schema.stream import UniversalStreamEvent
 from anyllm.schema.warnings import ConversionResult
 
 
@@ -230,6 +231,24 @@ class UniversalConverter:
         """
         adapter = self.get_adapter(provider)
         return adapter.uir_to_response(response)
+
+    def stream_event_to_uir(
+        self,
+        provider: str,
+        raw_event: dict[str, Any],
+    ) -> ConversionResult[list[UniversalStreamEvent]]:
+        """
+        将 provider 原始流式事件转换为 UIR UniversalStreamEvent 列表。
+
+        Args:
+            provider: 来源 provider 标识符。
+            raw_event: provider 流式事件对象。
+
+        Returns:
+            ConversionResult[list[UniversalStreamEvent]]
+        """
+        adapter = self.get_adapter(provider)
+        return adapter.stream_provider_to_uir(raw_event)
 
     # ------------------------------------------------------------------
     # 拦截器管道

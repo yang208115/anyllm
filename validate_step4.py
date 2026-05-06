@@ -654,6 +654,60 @@ g_resp_w = gemini_adapter.response_to_uir(gemini_response)
 assert any(w.code == "RESPONSE_CANDIDATES_TRUNCATED" for w in g_resp_w.warnings)
 print(f"{PASS} Gemini response_to_uir: stop/usage/tool_calls parsed + multi-candidate warning")
 
+# ==================================================================
+# Test 12: OpenAI stream_provider_to_uir
+# ==================================================================
+print("\n--- 12. OpenAI stream_provider_to_uir ---")
+
+openai_stream_event = {
+    "id": "chatcmpl_stream_1",
+    "choices": [
+        {
+            "index": 0,
+            "delta": {"role": "assistant", "content": "Hello"},
+            "finish_reason": None,
+        }
+    ],
+}
+
+s12 = openai_adapter.stream_provider_to_uir(openai_stream_event)
+assert any(e.type == "response_started" for e in s12.value)
+assert any(e.type == "message_started" for e in s12.value)
+assert any(e.type == "content_delta" for e in s12.value)
+print(f"{PASS} OpenAI stream start/content events parsed")
+
+openai_done_event = {"_sse_done": True}
+s12_done = openai_adapter.stream_provider_to_uir(openai_done_event)
+assert any(e.type == "message_completed" for e in s12_done.value)
+assert any(e.type == "response_completed" for e in s12_done.value)
+print(f"{PASS} OpenAI stream done event parsed")
+
+# ==================================================================
+# Test 13: Anthropic stream_provider_to_uir
+# ==================================================================
+print("\n--- 13. Anthropic stream_provider_to_uir ---")
+
+anthropic_start = {
+    "type": "message_start",
+    "data": {"message": {"id": "msg_stream_1"}},
+}
+s13_start = anthropic_adapter.stream_provider_to_uir(anthropic_start)
+assert any(e.type == "response_started" for e in s13_start.value)
+assert any(e.type == "message_started" for e in s13_start.value)
+
+anthropic_delta = {
+    "type": "content_block_delta",
+    "data": {"index": 0, "delta": {"type": "text_delta", "text": "Hi"}},
+}
+s13_delta = anthropic_adapter.stream_provider_to_uir(anthropic_delta)
+assert any(e.type == "content_delta" for e in s13_delta.value)
+
+anthropic_stop = {"type": "message_stop", "data": {}}
+s13_stop = anthropic_adapter.stream_provider_to_uir(anthropic_stop)
+assert any(e.type == "message_completed" for e in s13_stop.value)
+assert any(e.type == "response_completed" for e in s13_stop.value)
+print(f"{PASS} Anthropic stream start/delta/stop events parsed")
+
 print("\n" + "=" * 60)
 print("All Step 4 validations passed!")
 print("=" * 60)

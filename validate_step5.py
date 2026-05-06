@@ -400,7 +400,70 @@ asyncio.run(test_custom_interceptor())
 # ==================================================================
 # 7. Full import test
 # ==================================================================
-print("\n--- 7. Full import test ---")
+# ==================================================================
+# 7. Gateway stream transport + event conversion
+# ==================================================================
+print("\n--- 7. Gateway stream transport ---")
+
+class DummyStreamResponse:
+    def raise_for_status(self):
+        return None
+
+    async def aiter_lines(self):
+        lines = [
+            'data: {"id":"chatcmpl_stream_1","choices":[{"index":0,"delta":{"role":"assistant"},"finish_reason":null}]}',
+            '',
+            'data: {"id":"chatcmpl_stream_1","choices":[{"index":0,"delta":{"content":"Hi"},"finish_reason":null}]}',
+            '',
+            'data: [DONE]',
+            '',
+        ]
+        for line in lines:
+            yield line
+
+class DummyStreamContext:
+    def __init__(self):
+        self._resp = DummyStreamResponse()
+
+    async def __aenter__(self):
+        return self._resp
+
+    async def __aexit__(self, exc_type, exc, tb):
+        return False
+
+class DummyStreamClient:
+    def stream(self, method, url, json, headers):
+        assert method == "POST"
+        assert json.get("stream") is True
+        return DummyStreamContext()
+
+async def test_stream_path():
+    req = UniversalRequest(
+        model=ModelRef(provider="openai", name="gpt-4o"),
+        messages=[Message.user_text("Hi")],
+        generation=GenerationConfig(max_output_tokens=32),
+        stream=True,
+    )
+    events = []
+    async for event in gateway.chat_completions_stream(
+        req,
+        provider="openai_chat",
+        http_client=DummyStreamClient(),
+    ):
+        events.append(event.type)
+
+    assert "response_started" in events
+    assert "message_started" in events
+    assert "content_delta" in events
+    assert "response_completed" in events
+    print(f"  {PASS} Stream events emitted: {events}")
+
+asyncio.run(test_stream_path())
+
+# ==================================================================
+# 8. Full import test
+# ==================================================================
+print("\n--- 8. Full import test ---")
 
 assert hasattr(anyllm, 'AnyLLMGateway')
 assert hasattr(anyllm, 'UniversalConverter')

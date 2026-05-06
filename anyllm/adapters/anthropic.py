@@ -82,6 +82,7 @@ from anyllm.schema.request import (
     UniversalRequest,
 )
 from anyllm.schema.response import UniversalResponse, normalize_stop_reason
+from anyllm.schema.stream import UniversalStreamEvent
 from anyllm.schema.tools import (
     AutoToolChoice,
     JsonObjectResponseFormat,
@@ -368,6 +369,127 @@ class AnthropicAdapter(BaseAdapter):
         )
 
         return ConversionResult(value=response, warnings=warnings)
+
+    def stream_provider_to_uir(
+        self,
+        raw_event: dict[str, Any],
+    ) -> ConversionResult[list[UniversalStreamEvent]]:
+        warnings: list[ConversionWarning] = []
+        events: list[UniversalStreamEvent] = []
+
+        event_type = raw_event.get("type")
+        data = raw_event.get("data") or {}
+
+        if event_type == "message_start":
+            msg = data.get("message") or {}
+            message_id = msg.get("id")
+            events.append(
+                UniversalStreamEvent(
+                    type="response_started",
+                    response_id=message_id,
+                    message_id=message_id,
+                    raw=raw_event,
+                )
+            )
+            events.append(
+                UniversalStreamEvent(
+                    type="message_started",
+                    response_id=message_id,
+                    message_id=message_id,
+                    raw=raw_event,
+                )
+            )
+
+        elif event_type == "content_block_start":
+            content_block = data.get("content_block") or {}
+            if content_block.get("type") == "tool_use":
+                tool_input = content_block.get("input")
+                tool_arguments = tool_input if isinstance(tool_input, dict) else {}
+                events.append(
+                    UniversalStreamEvent(
+                        type="tool_call_started",
+                        response_id=data.get("message_id"),
+                        index=data.get("index"),
+                        tool_call=ToolCall(
+                            id=content_block.get("id", ""),
+                            name=content_block.get("name", ""),
+                            arguments=tool_arguments,
+                            raw_arguments="",
+                        ),
+                        raw=raw_event,
+                    )
+                )
+
+        elif event_type == "content_block_delta":
+            delta = data.get("delta") or {}
+            index = data.get("index")
+            if delta.get("type") == "text_delta":
+                events.append(
+                    UniversalStreamEvent(
+                        type="content_delta",
+                        index=index,
+                        delta=TextBlock(text=delta.get("text", "")),
+                        raw=raw_event,
+                    )
+                )
+            elif delta.get("type") == "input_json_delta":
+                events.append(
+                    UniversalStreamEvent(
+                        type="tool_call_delta",
+                        index=index,
+                        tool_call=ToolCall(
+                            id=data.get("tool_use_id", ""),
+                            name=data.get("tool_name", ""),
+                            arguments={},
+                            raw_arguments=delta.get("partial_json", ""),
+                        ),
+                        raw=raw_event,
+                    )
+                )
+
+        elif event_type == "content_block_stop":
+            events.append(
+                UniversalStreamEvent(
+                    type="tool_call_completed",
+                    index=data.get("index"),
+                    raw=raw_event,
+                )
+            )
+
+        elif event_type == "message_delta":
+            usage = data.get("usage") or {}
+            if usage:
+                events.append(
+                    UniversalStreamEvent(
+                        type="response_completed",
+                        usage=Usage(
+                            input_tokens=usage.get("input_tokens"),
+                            output_tokens=usage.get("output_tokens"),
+                            cached_input_tokens=usage.get("cache_read_input_tokens"),
+                            provider=usage,
+                        ),
+                        raw=raw_event,
+                    )
+                )
+
+        elif event_type == "message_stop":
+            events.append(UniversalStreamEvent(type="message_completed", raw=raw_event))
+            events.append(UniversalStreamEvent(type="response_completed", raw=raw_event))
+
+        elif event_type == "error":
+            events.append(UniversalStreamEvent(type="error", raw=raw_event))
+
+        else:
+            warnings.append(
+                ConversionWarning(
+                    code="STREAM_EVENT_DOWNGRADED",
+                    path="type",
+                    message=f"未识别的 Anthropic 流事件类型: {event_type}",
+                    severity="info",
+                )
+            )
+
+        return ConversionResult(value=events, warnings=warnings)
 
     # ==================================================================
     # uir_to_request: UIR UniversalRequest → Anthropic dict
