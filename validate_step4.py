@@ -1,29 +1,36 @@
-# -*- coding: utf-8 -*-
 """Step 4 validation - OpenAI Chat + Anthropic adapters full round-trip."""
 import asyncio
 import json
 
-from anyllm.adapters.openai_chat import OpenAIChatAdapter
 from anyllm.adapters.anthropic import AnthropicAdapter
+from anyllm.adapters.gemini import GeminiAdapter
+from anyllm.adapters.openai_chat import OpenAIChatAdapter
 from anyllm.conversion.converter import UniversalConverter
 from anyllm.interceptors import ImageResolutionInterceptor, RoleConsolidationInterceptor
 from anyllm.schema import (
-    TextBlock, ImageBlock, MediaSource, ToolCall, ToolResult,
-    ToolCallBlock, ToolResultBlock,
-    Message, ModelRef, GenerationConfig, UniversalRequest,
-    AutoToolChoice, SpecificToolChoice,
-    JsonSchemaResponseFormat, ToolDef,
+    AudioBlock,
+    FileBlock,
+    ImageBlock,
+    JsonSchemaResponseFormat,
+    MediaSource,
+    Message,
+    ModelRef,
+    NoneToolChoice,
+    TextBlock,
+    ToolDef,
+    UniversalRequest,
 )
 
 PASS = "[OK]"
 FAIL = "[FAIL]"
 
 print("=" * 60)
-print("Step 4: OpenAI Chat + Anthropic Adapters")
+print("Step 4: OpenAI Chat + Anthropic + Gemini Adapters")
 print("=" * 60)
 
 openai_adapter = OpenAIChatAdapter()
 anthropic_adapter = AnthropicAdapter()
+gemini_adapter = GeminiAdapter()
 
 # ==================================================================
 # Test 1: OpenAI Chat request_to_uir (basic text + system)
@@ -407,6 +414,245 @@ assert img.source.kind == "base64"
 assert img.source.mime_type == "image/jpeg"
 assert img.source.value == "/9j/4AAQ=="
 print(f"{PASS} data URI parsed: kind={img.source.kind}, mime={img.source.mime_type}")
+
+# ==================================================================
+# Test 10: Gemini request_to_uir and uir_to_request
+# ==================================================================
+print("\n--- 10. Gemini request_to_uir / uir_to_request ---")
+
+gemini_request = {
+    "model": "gemini-1.5-flash",
+    "systemInstruction": {
+        "parts": [{"text": "You are a concise assistant."}],
+    },
+    "contents": [
+        {"role": "user", "parts": [{"text": "Tokyo weather?"}]},
+        {
+            "role": "model",
+            "parts": [
+                {"text": "Let me call a tool."},
+                {
+                    "functionCall": {
+                        "id": "call_g1",
+                        "name": "get_weather",
+                        "args": {"city": "Tokyo"},
+                    }
+                },
+            ],
+        },
+        {
+            "role": "user",
+            "parts": [
+                {
+                    "functionResponse": {
+                        "id": "call_g1",
+                        "name": "get_weather",
+                        "response": {"output": "Sunny, 25C"},
+                    }
+                }
+            ],
+        },
+    ],
+    "tools": [
+        {
+            "functionDeclarations": [
+                {
+                    "name": "get_weather",
+                    "description": "Get weather",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"city": {"type": "string"}},
+                        "required": ["city"],
+                    },
+                }
+            ]
+        }
+    ],
+    "toolConfig": {"functionCallingConfig": {"mode": "AUTO"}},
+    "generationConfig": {
+        "temperature": 0.3,
+        "topP": 0.9,
+        "topK": 20,
+        "maxOutputTokens": 512,
+        "stopSequences": ["<END>"],
+        "responseMimeType": "application/json",
+    },
+}
+
+g_result = gemini_adapter.request_to_uir(gemini_request)
+g_uir = g_result.value
+assert g_uir.model.provider == "google"
+assert g_uir.model.name == "gemini-1.5-flash"
+assert len(g_uir.instructions) == 1
+assert g_uir.instructions[0].text == "You are a concise assistant."
+assert g_uir.messages[1].role == "assistant"
+assert len(g_uir.messages[1].tool_calls) == 1
+assert g_uir.messages[1].tool_calls[0].name == "get_weather"
+assert g_uir.messages[2].tool_results[0].call_id == "call_g1"
+assert g_uir.generation.max_output_tokens == 512
+assert g_uir.response_format.type == "json_object"
+print(f"{PASS} Gemini request_to_uir: instructions/tool_calls/tool_results parsed")
+
+g_back = gemini_adapter.uir_to_request(g_uir).value
+assert g_back["model"] == "gemini-1.5-flash"
+assert g_back["systemInstruction"]["parts"][0]["text"] == "You are a concise assistant."
+assert g_back["contents"][1]["role"] == "model"
+assert any("functionCall" in p for p in g_back["contents"][1]["parts"])
+assert any("functionResponse" in p for p in g_back["contents"][2]["parts"])
+print(f"{PASS} Gemini uir_to_request: role/functionCall/functionResponse preserved")
+
+# json_schema response format should map to responseSchema
+schema_req = UniversalRequest(
+    model=ModelRef(provider="google", name="gemini-1.5-flash"),
+    messages=[Message.user_text("Return JSON")],
+    response_format=JsonSchemaResponseFormat(
+        name="weather",
+        schema={
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
+        },
+        strict=False,
+    ),
+)
+schema_raw = gemini_adapter.uir_to_request(schema_req).value
+assert schema_raw["generationConfig"]["responseMimeType"] == "application/json"
+assert schema_raw["generationConfig"]["responseSchema"]["type"] == "object"
+print(f"{PASS} Gemini response_format json_schema -> responseSchema")
+
+# audio/file mapping
+multi_req = UniversalRequest(
+    model=ModelRef(provider="google", name="gemini-1.5-flash"),
+    messages=[
+        Message(
+            role="user",
+            content=[
+                AudioBlock(source=MediaSource(kind="base64", value="UklGRg==", mime_type="audio/wav"), format="wav"),
+                FileBlock(source=MediaSource(kind="file_id", value="gs://bucket/doc.pdf", mime_type="application/pdf"), mime_type="application/pdf"),
+            ],
+        )
+    ],
+)
+multi_raw = gemini_adapter.uir_to_request(multi_req).value
+parts = multi_raw["contents"][0]["parts"]
+assert any("inlineData" in p and p["inlineData"]["mimeType"].startswith("audio/") for p in parts)
+assert any("fileData" in p and p["fileData"]["fileUri"] == "gs://bucket/doc.pdf" for p in parts)
+print(f"{PASS} Gemini audio/file blocks mapped")
+
+# tool_choice NONE and unknown mode downgrade warning
+none_req = UniversalRequest(
+    model=ModelRef(provider="google", name="gemini-1.5-flash"),
+    messages=[Message.user_text("Hi")],
+    tool_choice=NoneToolChoice(),
+)
+none_raw = gemini_adapter.uir_to_request(none_req).value
+assert none_raw["toolConfig"]["functionCallingConfig"]["mode"] == "NONE"
+
+unknown_mode_req = {
+    "model": "gemini-1.5-flash",
+    "contents": [{"role": "user", "parts": [{"text": "Hi"}]}],
+    "toolConfig": {"functionCallingConfig": {"mode": "MYSTERY"}},
+}
+unknown_res = gemini_adapter.request_to_uir(unknown_mode_req)
+assert unknown_res.value.tool_choice.type == "auto"
+assert any(w.code == "TOOL_CHOICE_DOWNGRADED" for w in unknown_res.warnings)
+print(f"{PASS} Gemini tool_choice NONE + unknown mode warning")
+
+# non-function tool warning
+tool_warn_req = UniversalRequest(
+    model=ModelRef(provider="google", name="gemini-1.5-flash"),
+    messages=[Message.user_text("Hi")],
+    tools=[ToolDef(type="builtin", name="web_search")],
+)
+tool_warn_res = gemini_adapter.uir_to_request(tool_warn_req)
+assert any(w.code == "BUILTIN_TOOL_NOT_SUPPORTED" for w in tool_warn_res.warnings)
+print(f"{PASS} Gemini non-function tool warning emitted")
+
+# state warning
+state_req = UniversalRequest(
+    model=ModelRef(provider="google", name="gemini-1.5-flash"),
+    messages=[Message.user_text("Hi")],
+)
+state_req.state.conversation_id = "conv_1"
+state_res = gemini_adapter.uir_to_request(state_req)
+assert any(w.code == "STATE_NOT_SUPPORTED" for w in state_res.warnings)
+print(f"{PASS} Gemini state warning emitted")
+
+# functionResponse is_error round-trip parse
+func_resp = {
+    "model": "gemini-1.5-flash",
+    "contents": [
+        {
+            "role": "user",
+            "parts": [
+                {
+                    "functionResponse": {
+                        "id": "call_err",
+                        "name": "get_weather",
+                        "response": {"output": "boom", "is_error": True},
+                    }
+                }
+            ],
+        }
+    ],
+}
+func_res = gemini_adapter.request_to_uir(func_resp).value
+assert func_res.messages[0].tool_results[0].is_error is True
+print(f"{PASS} Gemini functionResponse is_error preserved")
+
+# ==================================================================
+# Test 11: Gemini response_to_uir
+# ==================================================================
+print("\n--- 11. Gemini response_to_uir ---")
+
+gemini_response = {
+    "responseId": "resp_g_1",
+    "modelVersion": "gemini-1.5-flash-001",
+    "candidates": [
+        {
+            "content": {
+                "role": "model",
+                "parts": [
+                    {"text": "Done."},
+                    {
+                        "functionCall": {
+                            "id": "call_g2",
+                            "name": "search_docs",
+                            "args": {"q": "AnyLLM"},
+                        }
+                    },
+                ],
+            },
+            "finishReason": "STOP",
+        },
+        {
+            "content": {
+                "role": "model",
+                "parts": [{"text": "Alternative candidate"}],
+            },
+            "finishReason": "STOP",
+        },
+    ],
+    "usageMetadata": {
+        "promptTokenCount": 12,
+        "candidatesTokenCount": 7,
+        "totalTokenCount": 19,
+    },
+}
+
+g_resp = gemini_adapter.response_to_uir(gemini_response).value
+assert g_resp.id == "resp_g_1"
+assert g_resp.model == "gemini-1.5-flash-001"
+assert g_resp.stop_reason == "end_turn"
+assert g_resp.usage.input_tokens == 12
+assert g_resp.usage.output_tokens == 7
+assert len(g_resp.output) == 1
+assert g_resp.output[0].role == "assistant"
+assert len(g_resp.output[0].tool_calls) == 1
+assert g_resp.output[0].tool_calls[0].name == "search_docs"
+g_resp_w = gemini_adapter.response_to_uir(gemini_response)
+assert any(w.code == "RESPONSE_CANDIDATES_TRUNCATED" for w in g_resp_w.warnings)
+print(f"{PASS} Gemini response_to_uir: stop/usage/tool_calls parsed + multi-candidate warning")
 
 print("\n" + "=" * 60)
 print("All Step 4 validations passed!")

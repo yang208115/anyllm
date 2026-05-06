@@ -32,7 +32,7 @@ gateway = AnyLLMGateway()
 每个 provider 通过 `ProviderConfig` 配置适配器和 API 参数：
 
 ```python
-from anyllm import ProviderConfig, OpenAIChatAdapter, AnthropicAdapter
+from anyllm import ProviderConfig, OpenAIChatAdapter, AnthropicAdapter, GeminiAdapter
 
 config = ProviderConfig(
     adapter=OpenAIChatAdapter(),      # 厂商适配器实例
@@ -66,6 +66,12 @@ gateway.register_provider("anthropic", ProviderConfig(
     api_key="sk-ant-xxx",
 ))
 
+gateway.register_provider("google", ProviderConfig(
+    adapter=GeminiAdapter(),
+    api_base="https://generativelanguage.googleapis.com",
+    api_key="$GOOGLE_API_KEY",
+))
+
 # 也可以注册 OpenAI 兼容的自定义端点
 gateway.register_provider("my_endpoint", ProviderConfig(
     adapter=OpenAIChatAdapter(),
@@ -78,7 +84,7 @@ gateway.register_provider("my_endpoint", ProviderConfig(
 
 ```python
 print(gateway.registered_providers)
-# ['openai_chat', 'anthropic', 'my_endpoint']
+# ['openai_chat', 'anthropic', 'google', 'my_endpoint']
 ```
 
 ## 路由策略
@@ -112,7 +118,7 @@ request = UniversalRequest(
 # 自动路由到 "anthropic"
 ```
 
-支持模糊匹配：`"openai"` 可以匹配 `"openai_chat"`。
+支持模糊匹配：`"openai"` 可以匹配 `"openai_chat"`。同时支持 provider alias：`"gemini"` 会规范化到 `"google"`。
 
 ### 优先级 3：模型名称推断
 
@@ -295,6 +301,8 @@ Headers:
 POST {api_base}/v1beta/models/{model}:generateContent?key={api_key}
 Headers:
   Content-Type: application/json
+
+说明：`model` 通过 URL path 传递，请求 body 不再重复包含 `model`。
 ```
 
 ### 自定义 HTTP 客户端
@@ -355,6 +363,7 @@ from anyllm import (
     ProviderConfig,
     OpenAIChatAdapter,
     AnthropicAdapter,
+    GeminiAdapter,
     ImageResolutionInterceptor,
     RoleConsolidationInterceptor,
     UniversalRequest,
@@ -382,6 +391,11 @@ gateway.register_provider("anthropic", ProviderConfig(
     adapter=AnthropicAdapter(),
     api_base="https://api.anthropic.com",
     api_key="sk-ant-xxx",
+))
+gateway.register_provider("google", ProviderConfig(
+    adapter=GeminiAdapter(),
+    api_base="https://generativelanguage.googleapis.com",
+    api_key="$GOOGLE_API_KEY",
 ))
 
 # ---- 注册拦截器 ----

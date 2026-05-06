@@ -16,7 +16,7 @@ Message — 统一消息结构（PRD §6）。
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -52,32 +52,32 @@ class Message(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     role: Role
-    content: List[ContentBlock] = Field(default_factory=list)
+    content: list[ContentBlock] = Field(default_factory=list)
     """多模态内容块列表，按顺序排列。"""
 
-    id: Optional[str] = None
+    id: str | None = None
     """消息 ID，OpenAI Responses API / Assistants API 会返回此字段。"""
 
-    name: Optional[str] = None
+    name: str | None = None
     """
     发言者名称，OpenAI Chat 的 name 字段（多 agent 场景区分不同 user）。
     """
 
-    tool_calls: List[ToolCall] = Field(default_factory=list)
+    tool_calls: list[ToolCall] = Field(default_factory=list)
     """
     工具调用列表（顶层表达，OpenAI Chat / Ollama 风格）。
     assistant 角色消息中，模型请求调用的工具列表。
     与 content 中的 ToolCallBlock 互为补充，适配器按需使用。
     """
 
-    tool_results: List[ToolResult] = Field(default_factory=list)
+    tool_results: list[ToolResult] = Field(default_factory=list)
     """
     工具执行结果列表（顶层表达，OpenAI Chat tool role 风格）。
     tool 角色消息中，应用层填充的工具执行结果。
     与 content 中的 ToolResultBlock 互为补充，适配器按需使用。
     """
 
-    provider: Dict[str, Any] = Field(default_factory=dict)
+    provider: dict[str, Any] = Field(default_factory=dict)
     """厂商原始数据透传区，例如 {"raw": <原始 message dict>}。"""
 
     # ------------------------------------------------------------------

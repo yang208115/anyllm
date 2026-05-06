@@ -9,9 +9,9 @@ UniversalStreamEvent — 统一流式事件（PRD §23）。
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 from anyllm.schema.content import ContentBlock, ToolCall
 from anyllm.schema.usage import Usage
@@ -54,23 +54,23 @@ class UniversalStreamEvent(BaseModel):
     type: StreamEventType
     """事件类型。"""
 
-    response_id: Optional[str] = None
+    response_id: str | None = None
     """响应 ID，response_started / response_completed 时填充。"""
 
-    message_id: Optional[str] = None
+    message_id: str | None = None
     """消息 ID，message_started / message_completed 时填充。"""
 
-    index: Optional[int] = None
+    index: int | None = None
     """内容块索引，用于多并行内容流的排序。"""
 
-    delta: Optional[ContentBlock] = None
+    delta: ContentBlock | None = None
     """
     内容增量，content_delta 事件时填充。
     通常为 TextBlock（text 字段含增量文本片段）。
     无法识别的 provider event 包装为 ProviderBlock。
     """
 
-    tool_call: Optional[ToolCall] = None
+    tool_call: ToolCall | None = None
     """
     工具调用信息：
       tool_call_started   : id 和 name 已知，arguments 可能为空或部分
@@ -78,7 +78,7 @@ class UniversalStreamEvent(BaseModel):
       tool_call_completed : 完整的 ToolCall 对象
     """
 
-    usage: Optional[Usage] = None
+    usage: Usage | None = None
     """Token 用量，response_completed 时填充。"""
 
     raw: Any = None

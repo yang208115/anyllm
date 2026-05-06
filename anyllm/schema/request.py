@@ -12,7 +12,7 @@ UniversalRequest — AnyLLM 统一请求体（PRD §5）。
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -59,7 +59,7 @@ class ModelRef(BaseModel):
     provider: ProviderName = "unknown"
     """来源 provider，路由适配器时使用。"""
 
-    raw: Dict[str, Any] = Field(default_factory=dict)
+    raw: dict[str, Any] = Field(default_factory=dict)
     """provider 返回的原始模型元数据透传区。"""
 
 
@@ -76,35 +76,35 @@ class GenerationConfig(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    temperature: Optional[float] = None
+    temperature: float | None = None
     """采样温度，0 = 确定性，值越大越随机。各 provider 上限不同（Anthropic 最大 1）。"""
 
-    top_p: Optional[float] = None
+    top_p: float | None = None
     """Nucleus sampling 参数，通常与 temperature 二选一。"""
 
-    top_k: Optional[int] = None
+    top_k: int | None = None
     """Top-K 采样，Anthropic / Gemini / Bedrock 支持，OpenAI 不支持。"""
 
-    max_output_tokens: Optional[int] = None
+    max_output_tokens: int | None = None
     """
     最大输出 token 数。
     Anthropic 要求必填（适配器层默认填 1024），其余 provider 可选。
     映射时注意字段名差异：OpenAI 为 max_tokens，Bedrock 为 maxTokens。
     """
 
-    stop: Optional[List[str]] = None
+    stop: list[str] | None = None
     """停止序列列表，遇到任一序列时停止生成。"""
 
-    seed: Optional[int] = None
+    seed: int | None = None
     """随机种子，用于复现输出（OpenAI / Gemini 支持，Anthropic 不支持）。"""
 
-    presence_penalty: Optional[float] = None
+    presence_penalty: float | None = None
     """存在惩罚，OpenAI 专用，其他 provider 忽略。"""
 
-    frequency_penalty: Optional[float] = None
+    frequency_penalty: float | None = None
     """频率惩罚，OpenAI 专用，其他 provider 忽略。"""
 
-    raw: Dict[str, Any] = Field(default_factory=dict)
+    raw: dict[str, Any] = Field(default_factory=dict)
     """额外的生成参数透传区，用于传递 UIR 未覆盖的厂商特定参数。"""
 
 
@@ -121,19 +121,19 @@ class ConversationState(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    conversation_id: Optional[str] = None
+    conversation_id: str | None = None
     """OpenAI Responses API 会话 ID。"""
 
-    thread_id: Optional[str] = None
+    thread_id: str | None = None
     """OpenAI Assistants API Thread ID。"""
 
-    run_id: Optional[str] = None
+    run_id: str | None = None
     """OpenAI Assistants API Run ID。"""
 
-    previous_response_id: Optional[str] = None
+    previous_response_id: str | None = None
     """OpenAI Responses API 上一轮响应 ID，用于继续有状态对话。"""
 
-    provider_state: Dict[str, Any] = Field(default_factory=dict)
+    provider_state: dict[str, Any] = Field(default_factory=dict)
     """
     其他 provider 特定状态数据，例如：
     {"assistant_id": "asst_xxx"}  # OpenAI Assistants
@@ -167,10 +167,10 @@ class UniversalRequest(BaseModel):
     model: ModelRef
     """目标模型引用，包含 provider 和 name。"""
 
-    messages: List[Message]
+    messages: list[Message]
     """对话历史，按时间顺序排列。"""
 
-    instructions: List[ContentBlock] = Field(default_factory=list)
+    instructions: list[ContentBlock] = Field(default_factory=list)
     """
     System Prompt，抽离至顶层，类型为 List[ContentBlock] 以支持多模态指令。
     通常只包含 TextBlock，但理论上可包含 ImageBlock（如 vision 系统提示）。
@@ -183,13 +183,13 @@ class UniversalRequest(BaseModel):
       Bedrock          : 转为顶层 system[{text: ...}]
     """
 
-    tools: List[ToolDef] = Field(default_factory=list)
+    tools: list[ToolDef] = Field(default_factory=list)
     """可供模型调用的工具列表，为空时禁用 function calling。"""
 
-    tool_choice: Optional[ToolChoice] = None
+    tool_choice: ToolChoice | None = None
     """工具选择策略，None 时由适配器决定默认行为（通常等同于 auto）。"""
 
-    response_format: Optional[ResponseFormat] = None
+    response_format: ResponseFormat | None = None
     """结构化输出格式，None 时使用纯文本输出。"""
 
     generation: GenerationConfig = Field(default_factory=GenerationConfig)
@@ -201,10 +201,10 @@ class UniversalRequest(BaseModel):
     state: ConversationState = Field(default_factory=ConversationState)
     """有状态会话信息，L2 能力，大多数 provider 不支持。"""
 
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
     """用户自定义元数据，不传给 provider，用于网关层内部追踪。"""
 
-    vendor: Dict[str, Any] = Field(default_factory=dict)
+    vendor: dict[str, Any] = Field(default_factory=dict)
     """
     厂商特定字段透传区，按 provider 名称分组，例如：
     {

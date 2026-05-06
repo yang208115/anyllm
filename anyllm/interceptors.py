@@ -69,25 +69,13 @@ from __future__ import annotations
 import base64
 import logging
 import mimetypes
-from copy import deepcopy
-from typing import (
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Union,
-)
+from collections.abc import Awaitable, Callable
 
 from anyllm.adapters.base import BaseInterceptor
 from anyllm.schema.content import (
     ContentBlock,
     ImageBlock,
     MediaSource,
-    TextBlock,
-    ToolCallBlock,
-    ToolResult,
     ToolResultBlock,
 )
 from anyllm.schema.message import Message
@@ -144,7 +132,7 @@ class FunctionInterceptor(BaseInterceptor):
         interceptor_name: str,
         fn: InterceptorFn,
         *,
-        only_for: Optional[Set[str]] = None,
+        only_for: set[str] | None = None,
     ) -> None:
         self._name = interceptor_name
         self._fn = fn
@@ -178,7 +166,7 @@ class FunctionInterceptor(BaseInterceptor):
 def interceptor(
     name: str,
     *,
-    only_for: Optional[Set[str]] = None,
+    only_for: set[str] | None = None,
 ) -> Callable[[InterceptorFn], FunctionInterceptor]:
     """
     装饰器 — 将一个 async 函数转换为 FunctionInterceptor 实例。
@@ -222,7 +210,7 @@ def interceptor(
 
 # 需要将 URL 图片预转换为 base64 的 provider 集合
 # 这些 provider 不支持直接传递图片 URL
-_PROVIDERS_REQUIRING_BASE64_IMAGE: Set[str] = {
+_PROVIDERS_REQUIRING_BASE64_IMAGE: set[str] = {
     "anthropic",
     "bedrock",
 }
@@ -321,7 +309,7 @@ class ImageResolutionInterceptor(BaseInterceptor):
         )
 
         # 收集所有需要转换的 ImageBlock 引用
-        image_blocks: List[ImageBlock] = []
+        image_blocks: list[ImageBlock] = []
 
         # 扫描 instructions
         for block in request.instructions:
@@ -478,7 +466,7 @@ class RoleConsolidationInterceptor(BaseInterceptor):
     """
 
     # 需要执行角色整理的 provider 集合
-    _STRICT_ALTERNATION_PROVIDERS: Set[str] = {
+    _STRICT_ALTERNATION_PROVIDERS: set[str] = {
         "anthropic",
         "google",
         "bedrock",
@@ -533,8 +521,8 @@ class RoleConsolidationInterceptor(BaseInterceptor):
 
         处理后 messages 中不再包含 system / developer 角色的消息。
         """
-        hoisted: List[ContentBlock] = []
-        remaining: List[Message] = []
+        hoisted: list[ContentBlock] = []
+        remaining: list[Message] = []
 
         for msg in request.messages:
             if msg.role in ("system", "developer"):
@@ -568,9 +556,9 @@ class RoleConsolidationInterceptor(BaseInterceptor):
 
         如果 tool 消息后面没有 user 消息，则创建一个新的 user 消息来容纳 tool_results。
         """
-        new_messages: List[Message] = []
+        new_messages: list[Message] = []
         # 暂存连续的 tool 消息中提取出的 ToolResultBlock
-        pending_tool_result_blocks: List[ContentBlock] = []
+        pending_tool_result_blocks: list[ContentBlock] = []
 
         for msg in request.messages:
             if msg.role == "tool":
@@ -666,7 +654,7 @@ class RoleConsolidationInterceptor(BaseInterceptor):
         if not request.messages:
             return request
 
-        merged: List[Message] = [request.messages[0]]
+        merged: list[Message] = [request.messages[0]]
 
         for msg in request.messages[1:]:
             last = merged[-1]

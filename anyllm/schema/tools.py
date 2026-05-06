@@ -7,10 +7,9 @@ ToolDef、ToolChoice、ResponseFormat — 工具定义与输出格式（PRD §8,
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Dict, Literal, Optional, Union
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ---------------------------------------------------------------------------
 # ToolDef — 工具定义
@@ -40,10 +39,10 @@ class ToolDef(BaseModel):
     name: str
     """工具名称，需唯一，建议 snake_case，不超过 64 个字符。"""
 
-    description: Optional[str] = None
+    description: str | None = None
     """工具功能描述，供模型理解何时应调用此工具。尽量简洁清晰。"""
 
-    input_schema: Optional[Dict[str, Any]] = None
+    input_schema: dict[str, Any] | None = None
     """
     输入参数 JSON Schema，例如：
     {
@@ -53,10 +52,10 @@ class ToolDef(BaseModel):
     }
     """
 
-    output_schema: Optional[Dict[str, Any]] = None
+    output_schema: dict[str, Any] | None = None
     """输出结果 JSON Schema（OpenAI Responses strict mode 支持，其他 provider 忽略）。"""
 
-    provider: Dict[str, Any] = Field(default_factory=dict)
+    provider: dict[str, Any] = Field(default_factory=dict)
     """厂商特定参数透传区，例如 Anthropic cache_control、OpenAI strict。"""
 
 
@@ -103,7 +102,7 @@ class SpecificToolChoice(BaseModel):
 
 
 ToolChoice = Annotated[
-    Union[AutoToolChoice, NoneToolChoice, RequiredToolChoice, SpecificToolChoice],
+    AutoToolChoice | NoneToolChoice | RequiredToolChoice | SpecificToolChoice,
     Field(discriminator="type"),
 ]
 """工具选择策略，支持 "auto" | "none" | "required" | "tool"。"""
@@ -145,7 +144,7 @@ class JsonSchemaResponseFormat(BaseModel):
     name: str
     """schema 名称标识符，OpenAI 要求必填。"""
 
-    json_schema: Dict[str, Any] = Field(alias="schema")
+    json_schema: dict[str, Any] = Field(alias="schema")
     """JSON Schema 定义，描述期望的输出结构。字段名为 'schema'，以保持与 OpenAI API 兼容。"""
 
     strict: bool = False
@@ -156,7 +155,7 @@ class JsonSchemaResponseFormat(BaseModel):
 
 
 ResponseFormat = Annotated[
-    Union[TextResponseFormat, JsonObjectResponseFormat, JsonSchemaResponseFormat],
+    TextResponseFormat | JsonObjectResponseFormat | JsonSchemaResponseFormat,
     Field(discriminator="type"),
 ]
 """结构化输出格式，支持 "text" | "json_object" | "json_schema"。"""

@@ -1,21 +1,25 @@
-# -*- coding: utf-8 -*-
 """Step 1 validation — covers all core data models from the PRD."""
-import sys
-import json
 from pydantic import TypeAdapter
 
 from anyllm.schema import (
-    TextBlock, ImageBlock, AudioBlock, FileBlock, ThinkingBlock,
-    RefusalBlock, ToolCallBlock, ToolResultBlock, ProviderBlock,
-    ContentBlock, MediaSource, ToolCall, ToolResult,
-    ToolDef, AutoToolChoice, SpecificToolChoice,
+    AutoToolChoice,
+    ContentBlock,
+    ConversationState,
+    ConversionResult,
+    GenerationConfig,
+    ImageBlock,
     JsonSchemaResponseFormat,
-    Message, Role,
-    ModelRef, GenerationConfig, ConversationState, UniversalRequest,
-    UniversalResponse, Usage,
-    ConversionWarning, ConversionResult,
+    MediaSource,
+    Message,
+    ModelRef,
+    TextBlock,
+    ToolCall,
+    ToolDef,
+    ToolResult,
+    UniversalRequest,
     UniversalStreamEvent,
-    parse_tool_arguments, normalize_stop_reason,
+    normalize_stop_reason,
+    parse_tool_arguments,
 )
 
 ta = TypeAdapter(ContentBlock)

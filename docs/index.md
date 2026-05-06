@@ -46,7 +46,8 @@ anyllm/
 ├── adapters/                   # 厂商适配器
 │   ├── base.py                 # BaseAdapter + BaseInterceptor + ProviderCapabilities
 │   ├── openai_chat.py          # OpenAI Chat Completions
-│   └── anthropic.py            # Anthropic Messages API
+│   ├── anthropic.py            # Anthropic Messages API
+│   └── gemini.py               # Google Gemini generateContent API
 ├── conversion/                 # 转换层
 │   ├── converter.py            # UniversalConverter 编排器
 │   └── lowering.py             # 降级工具函数

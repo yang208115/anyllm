@@ -34,14 +34,13 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
 from anyllm.schema.request import UniversalRequest
 from anyllm.schema.response import UniversalResponse
 from anyllm.schema.warnings import ConversionResult
-
 
 # =====================================================================
 # Provider 能力矩阵 (PRD §12)
@@ -176,7 +175,7 @@ class BaseAdapter(ABC):
     @abstractmethod
     def request_to_uir(
         self,
-        raw_request: Dict[str, Any],
+        raw_request: dict[str, Any],
     ) -> ConversionResult[UniversalRequest]:
         """
         将 provider 原始请求（dict）转换为 UIR UniversalRequest。
@@ -202,7 +201,7 @@ class BaseAdapter(ABC):
     @abstractmethod
     def response_to_uir(
         self,
-        raw_response: Dict[str, Any],
+        raw_response: dict[str, Any],
     ) -> ConversionResult[UniversalResponse]:
         """
         将 provider 原始响应（dict）转换为 UIR UniversalResponse。
@@ -227,7 +226,7 @@ class BaseAdapter(ABC):
     def uir_to_request(
         self,
         request: UniversalRequest,
-    ) -> ConversionResult[Dict[str, Any]]:
+    ) -> ConversionResult[dict[str, Any]]:
         """
         将 UIR UniversalRequest 转换为 provider 原始请求（dict）。
 
@@ -251,7 +250,7 @@ class BaseAdapter(ABC):
     def uir_to_response(
         self,
         response: UniversalResponse,
-    ) -> ConversionResult[Dict[str, Any]]:
+    ) -> ConversionResult[dict[str, Any]]:
         """
         将 UIR UniversalResponse 转换为 provider 原始响应（dict）。
 

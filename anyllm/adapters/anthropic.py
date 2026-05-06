@@ -57,15 +57,13 @@ Anthropic Messages API 适配器（PRD §17）。
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from anyllm.adapters.base import BaseAdapter, ProviderCapabilities
 from anyllm.capabilities.matrix import ANTHROPIC_CAPABILITIES
 from anyllm.conversion.lowering import blocks_to_plain_text
 from anyllm.schema.content import (
-    AudioBlock,
     ContentBlock,
-    FileBlock,
     ImageBlock,
     MediaSource,
     ProviderBlock,
@@ -76,7 +74,6 @@ from anyllm.schema.content import (
     ToolCallBlock,
     ToolResult,
     ToolResultBlock,
-    parse_tool_arguments,
 )
 from anyllm.schema.message import Message
 from anyllm.schema.request import (
@@ -91,7 +88,6 @@ from anyllm.schema.tools import (
     JsonSchemaResponseFormat,
     NoneToolChoice,
     RequiredToolChoice,
-    ResponseFormat,
     SpecificToolChoice,
     ToolChoice,
     ToolDef,
@@ -128,7 +124,7 @@ class AnthropicAdapter(BaseAdapter):
 
     def request_to_uir(
         self,
-        raw_request: Dict[str, Any],
+        raw_request: dict[str, Any],
     ) -> ConversionResult[UniversalRequest]:
         """
         将 Anthropic Messages API 原始请求转换为 UIR。
@@ -140,9 +136,9 @@ class AnthropicAdapter(BaseAdapter):
           - image block (base64) → ImageBlock
           - thinking block → ThinkingBlock
         """
-        warnings: List[ConversionWarning] = []
-        instructions: List[ContentBlock] = []
-        messages: List[Message] = []
+        warnings: list[ConversionWarning] = []
+        instructions: list[ContentBlock] = []
+        messages: list[Message] = []
 
         # ---- 解析 system 指令 ----
         system = raw_request.get("system")
@@ -160,9 +156,9 @@ class AnthropicAdapter(BaseAdapter):
             role = msg.get("role", "user")
             path = f"messages[{idx}]"
 
-            content: List[ContentBlock] = []
-            tool_calls: List[ToolCall] = []
-            tool_results: List[ToolResult] = []
+            content: list[ContentBlock] = []
+            tool_calls: list[ToolCall] = []
+            tool_results: list[ToolResult] = []
 
             # Anthropic 的 content 永远是数组
             for j, block in enumerate(msg.get("content", [])):
@@ -252,7 +248,7 @@ class AnthropicAdapter(BaseAdapter):
 
         # ---- 解析 tools ----
         tools = []
-        for i, t in enumerate(raw_request.get("tools") or []):
+        for _i, t in enumerate(raw_request.get("tools") or []):
             tools.append(ToolDef(
                 type="function",
                 name=t.get("name", ""),
@@ -303,7 +299,7 @@ class AnthropicAdapter(BaseAdapter):
 
     def response_to_uir(
         self,
-        raw_response: Dict[str, Any],
+        raw_response: dict[str, Any],
     ) -> ConversionResult[UniversalResponse]:
         """
         将 Anthropic Messages API 原始响应转换为 UIR。
@@ -315,10 +311,10 @@ class AnthropicAdapter(BaseAdapter):
           - stop_reason → normalize_stop_reason("anthropic", ...)
           - usage → UIR Usage（含 cache 信息）
         """
-        warnings: List[ConversionWarning] = []
+        warnings: list[ConversionWarning] = []
 
-        content: List[ContentBlock] = []
-        tool_calls: List[ToolCall] = []
+        content: list[ContentBlock] = []
+        tool_calls: list[ToolCall] = []
 
         for block in raw_response.get("content", []):
             block_type = block.get("type", "")
@@ -380,7 +376,7 @@ class AnthropicAdapter(BaseAdapter):
     def uir_to_request(
         self,
         request: UniversalRequest,
-    ) -> ConversionResult[Dict[str, Any]]:
+    ) -> ConversionResult[dict[str, Any]]:
         """
         将 UIR 转换为 Anthropic Messages API 请求格式。
 
@@ -393,9 +389,9 @@ class AnthropicAdapter(BaseAdapter):
           - max_tokens 必填（UIR 未指定时使用默认值 4096）
           - 不允许连续同角色消息（需 RoleConsolidationInterceptor 预处理）
         """
-        warnings: List[ConversionWarning] = []
+        warnings: list[ConversionWarning] = []
 
-        raw: Dict[str, Any] = {
+        raw: dict[str, Any] = {
             "model": request.model.name,
             "messages": [],
             # Anthropic 要求 max_tokens 必填
@@ -428,7 +424,7 @@ class AnthropicAdapter(BaseAdapter):
                 continue
 
             # 构建 Anthropic 消息
-            anthropic_msg: Dict[str, Any] = {
+            anthropic_msg: dict[str, Any] = {
                 "role": self._map_role_to_anthropic(msg.role, warnings, f"{path}.role"),
                 "content": [],
             }
@@ -494,14 +490,15 @@ class AnthropicAdapter(BaseAdapter):
         self._apply_generation_config(raw, request.generation)
 
         # ---- response_format（Anthropic 不原生支持，需降级）----
-        if request.response_format is not None:
-            if isinstance(request.response_format, (JsonObjectResponseFormat, JsonSchemaResponseFormat)):
-                warnings.append(ConversionWarning(
-                    code="RESPONSE_FORMAT_DOWNGRADED",
-                    path="response_format",
-                    message="Anthropic 不原生支持 json_object / json_schema 格式，"
-                            "建议在 system prompt 中说明输出格式要求。",
-                ))
+        if request.response_format is not None and isinstance(
+            request.response_format, (JsonObjectResponseFormat, JsonSchemaResponseFormat)
+        ):
+            warnings.append(ConversionWarning(
+                code="RESPONSE_FORMAT_DOWNGRADED",
+                path="response_format",
+                message="Anthropic 不原生支持 json_object / json_schema 格式，"
+                        "建议在 system prompt 中说明输出格式要求。",
+            ))
 
         # ---- stream ----
         if request.stream:
@@ -529,9 +526,9 @@ class AnthropicAdapter(BaseAdapter):
     def uir_to_response(
         self,
         response: UniversalResponse,
-    ) -> ConversionResult[Dict[str, Any]]:
+    ) -> ConversionResult[dict[str, Any]]:
         """将 UIR 响应转换回 Anthropic Messages API 响应格式。"""
-        warnings: List[ConversionWarning] = []
+        warnings: list[ConversionWarning] = []
 
         # 映射 stop_reason 回 Anthropic 格式
         stop_reason_map = {
@@ -543,7 +540,7 @@ class AnthropicAdapter(BaseAdapter):
         stop_reason = stop_reason_map.get(response.stop_reason, "end_turn")
 
         # 取第一条输出消息
-        content_blocks: List[Dict[str, Any]] = []
+        content_blocks: list[dict[str, Any]] = []
         if response.output:
             msg = response.output[0]
             for block in msg.content:
@@ -559,7 +556,7 @@ class AnthropicAdapter(BaseAdapter):
                     "input": call.arguments,
                 })
 
-        raw: Dict[str, Any] = {
+        raw: dict[str, Any] = {
             "id": response.id or "",
             "type": "message",
             "role": "assistant",
@@ -583,8 +580,8 @@ class AnthropicAdapter(BaseAdapter):
     def _parse_tool_choice(
         self,
         raw: Any,
-        warnings: List[ConversionWarning],
-    ) -> Optional[ToolChoice]:
+        warnings: list[ConversionWarning],
+    ) -> ToolChoice | None:
         """
         解析 Anthropic tool_choice 字段。
 
@@ -615,7 +612,7 @@ class AnthropicAdapter(BaseAdapter):
     def _map_role_to_anthropic(
         self,
         role: str,
-        warnings: List[ConversionWarning],
+        warnings: list[ConversionWarning],
         path: str,
     ) -> str:
         """
@@ -641,9 +638,9 @@ class AnthropicAdapter(BaseAdapter):
     def _block_to_anthropic(
         self,
         block: ContentBlock,
-        warnings: List[ConversionWarning],
+        warnings: list[ConversionWarning],
         path: str,
-    ) -> Optional[Dict[str, Any]]:
+    ) -> dict[str, Any] | None:
         """
         将单个 UIR ContentBlock 转换为 Anthropic content block dict。
 
@@ -690,7 +687,7 @@ class AnthropicAdapter(BaseAdapter):
             }
 
         if isinstance(block, ThinkingBlock):
-            result: Dict[str, Any] = {"type": "thinking"}
+            result: dict[str, Any] = {"type": "thinking"}
             if block.text:
                 result["thinking"] = block.text
             if block.encrypted:
@@ -722,9 +719,9 @@ class AnthropicAdapter(BaseAdapter):
         ))
         return {"type": "text", "text": f"[{type(block).__name__} omitted]"}
 
-    def _tool_def_to_anthropic(self, tool: ToolDef) -> Dict[str, Any]:
+    def _tool_def_to_anthropic(self, tool: ToolDef) -> dict[str, Any]:
         """将 UIR ToolDef 转换为 Anthropic tools[] 元素。"""
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "name": tool.name,
             "description": tool.description or "",
             "input_schema": tool.input_schema or {
@@ -741,8 +738,8 @@ class AnthropicAdapter(BaseAdapter):
     def _tool_choice_to_anthropic(
         self,
         choice: ToolChoice,
-        warnings: List[ConversionWarning],
-    ) -> Dict[str, Any]:
+        warnings: list[ConversionWarning],
+    ) -> dict[str, Any]:
         """
         将 UIR ToolChoice 转换为 Anthropic tool_choice 字段。
 
@@ -770,7 +767,7 @@ class AnthropicAdapter(BaseAdapter):
 
     def _apply_generation_config(
         self,
-        raw: Dict[str, Any],
+        raw: dict[str, Any],
         gen: GenerationConfig,
     ) -> None:
         """将 UIR GenerationConfig 映射到 Anthropic 请求字段。"""

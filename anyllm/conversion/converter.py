@@ -34,7 +34,7 @@ UniversalConverter — 转换器总入口（PRD §13）。
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from anyllm.adapters.base import BaseAdapter, BaseInterceptor
 from anyllm.schema.request import UniversalRequest
@@ -53,9 +53,9 @@ class UniversalConverter:
 
     def __init__(self) -> None:
         # 已注册的适配器字典，键为 provider 标识符
-        self._adapters: Dict[str, BaseAdapter] = {}
+        self._adapters: dict[str, BaseAdapter] = {}
         # 已注册的拦截器列表，按注册顺序执行
-        self._interceptors: List[BaseInterceptor] = []
+        self._interceptors: list[BaseInterceptor] = []
 
     # ------------------------------------------------------------------
     # 注册
@@ -76,7 +76,7 @@ class UniversalConverter:
         self,
         interceptor: BaseInterceptor,
         *,
-        position: Optional[int] = None,
+        position: int | None = None,
     ) -> None:
         """
         注册一个拦截器。
@@ -121,7 +121,7 @@ class UniversalConverter:
         return len(self._interceptors) < before
 
     @property
-    def registered_interceptors(self) -> List[str]:
+    def registered_interceptors(self) -> list[str]:
         """返回所有已注册的拦截器名称列表（按执行顺序）。"""
         return [i.name for i in self._interceptors]
 
@@ -147,7 +147,7 @@ class UniversalConverter:
         return self._adapters[provider]
 
     @property
-    def registered_providers(self) -> List[str]:
+    def registered_providers(self) -> list[str]:
         """返回所有已注册的 provider 标识符列表。"""
         return list(self._adapters.keys())
 
@@ -158,7 +158,7 @@ class UniversalConverter:
     def request_to_uir(
         self,
         provider: str,
-        raw_request: Dict[str, Any],
+        raw_request: dict[str, Any],
     ) -> ConversionResult[UniversalRequest]:
         """
         将 provider 原始请求转换为 UIR UniversalRequest。
@@ -176,7 +176,7 @@ class UniversalConverter:
     def response_to_uir(
         self,
         provider: str,
-        raw_response: Dict[str, Any],
+        raw_response: dict[str, Any],
     ) -> ConversionResult[UniversalResponse]:
         """
         将 provider 原始响应转换为 UIR UniversalResponse。
@@ -199,7 +199,7 @@ class UniversalConverter:
         self,
         provider: str,
         request: UniversalRequest,
-    ) -> ConversionResult[Dict[str, Any]]:
+    ) -> ConversionResult[dict[str, Any]]:
         """
         将 UIR UniversalRequest 转换为 provider 原始请求 dict。
 
@@ -217,7 +217,7 @@ class UniversalConverter:
         self,
         provider: str,
         response: UniversalResponse,
-    ) -> ConversionResult[Dict[str, Any]]:
+    ) -> ConversionResult[dict[str, Any]]:
         """
         将 UIR UniversalResponse 转换为 provider 原始响应 dict。
 
@@ -268,8 +268,8 @@ class UniversalConverter:
         self,
         source_provider: str,
         target_provider: str,
-        raw_request: Dict[str, Any],
-    ) -> ConversionResult[Dict[str, Any]]:
+        raw_request: dict[str, Any],
+    ) -> ConversionResult[dict[str, Any]]:
         """
         完整的请求转换链路（PRD §13.1 convert_request）。
 
@@ -310,8 +310,8 @@ class UniversalConverter:
         self,
         source_provider: str,
         target_provider: str,
-        raw_response: Dict[str, Any],
-    ) -> ConversionResult[Dict[str, Any]]:
+        raw_response: dict[str, Any],
+    ) -> ConversionResult[dict[str, Any]]:
         """
         完整的响应转换链路。
 

@@ -6,7 +6,7 @@ UniversalResponse — 统一响应体（PRD §26）。
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,7 +15,7 @@ from anyllm.schema.request import ConversationState, StopReason
 from anyllm.schema.usage import Usage
 
 # Stop reason 映射表（PRD §24）
-PROVIDER_STOP_REASON_MAP: Dict[str, Dict[str, StopReason]] = {
+PROVIDER_STOP_REASON_MAP: dict[str, dict[str, StopReason]] = {
     "openai": {
         "stop": "end_turn",
         "length": "max_tokens",
@@ -43,7 +43,7 @@ PROVIDER_STOP_REASON_MAP: Dict[str, Dict[str, StopReason]] = {
 }
 
 
-def normalize_stop_reason(provider: str, raw_reason: Optional[str]) -> StopReason:
+def normalize_stop_reason(provider: str, raw_reason: str | None) -> StopReason:
     """
     将 provider 原始 stop reason 映射为统一的 StopReason 枚举值。
 
@@ -70,19 +70,19 @@ class UniversalResponse(BaseModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    id: Optional[str] = None
+    id: str | None = None
     """响应 ID，由 provider 生成。"""
 
-    model: Optional[str] = None
+    model: str | None = None
     """实际使用的模型名称（provider 返回，可能与请求的 model 不同）。"""
 
-    output: List[Message] = Field(default_factory=list)
+    output: list[Message] = Field(default_factory=list)
     """模型输出消息列表，通常为单条 assistant 消息。"""
 
     stop_reason: StopReason = "unknown"
     """统一停止原因，由 normalize_stop_reason() 映射。"""
 
-    usage: Optional[Usage] = None
+    usage: Usage | None = None
     """Token 用量统计。"""
 
     state: ConversationState = Field(default_factory=ConversationState)
@@ -91,5 +91,5 @@ class UniversalResponse(BaseModel):
     raw: Any = None
     """provider 原始响应，完整保留用于调试。"""
 
-    vendor: Dict[str, Any] = Field(default_factory=dict)
+    vendor: dict[str, Any] = Field(default_factory=dict)
     """厂商特定响应字段透传区，例如 Anthropic 的 cache 统计。"""

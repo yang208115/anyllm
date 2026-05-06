@@ -26,7 +26,7 @@ ConversionWarning 和 ConversionResult — 转换结果包装器。
 
 from __future__ import annotations
 
-from typing import Any, Generic, List, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -69,7 +69,7 @@ class ConversionResult(BaseModel, Generic[T]):
     value: T
     """转换结果，可以是 UniversalRequest、UniversalResponse 或 dict。"""
 
-    warnings: List[ConversionWarning] = Field(default_factory=list)
+    warnings: list[ConversionWarning] = Field(default_factory=list)
     """转换过程中产生的所有警告，按发生顺序排列。"""
 
     def add_warning(

@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from anyllm.schema.content import (
     AudioBlock,
@@ -21,18 +21,16 @@ from anyllm.schema.content import (
     RefusalBlock,
     TextBlock,
     ThinkingBlock,
-    ToolCall,
     ToolCallBlock,
     ToolResult,
     ToolResultBlock,
-    parse_tool_arguments,
 )
 from anyllm.schema.warnings import ConversionWarning
 
 
 def blocks_to_plain_text(
-    blocks: List[ContentBlock],
-    warnings: List[ConversionWarning],
+    blocks: list[ContentBlock],
+    warnings: list[ConversionWarning],
     path: str,
 ) -> str:
     """
@@ -62,7 +60,7 @@ def blocks_to_plain_text(
     Returns:
         降级后的纯文本字符串，多个 block 之间用换行符连接。
     """
-    parts: List[str] = []
+    parts: list[str] = []
 
     for i, block in enumerate(blocks):
         block_path = f"{path}[{i}]"
@@ -163,7 +161,7 @@ def blocks_to_plain_text(
 
 def tool_result_content_to_text(
     result: ToolResult,
-    warnings: List[ConversionWarning],
+    warnings: list[ConversionWarning],
     path: str,
 ) -> str:
     """
@@ -183,7 +181,7 @@ def tool_result_content_to_text(
     return blocks_to_plain_text(result.content, warnings, path)
 
 
-def extract_text_from_blocks(blocks: List[ContentBlock]) -> str:
+def extract_text_from_blocks(blocks: list[ContentBlock]) -> str:
     """
     从 ContentBlock 列表中提取所有 TextBlock 的文本，忽略其他类型。
 

@@ -326,6 +326,30 @@ warnings.append(ConversionWarning(
 - 不支持 `json_object` / `json_schema` 响应格式
 - 不支持有状态会话
 
+### GeminiAdapter
+
+**模块**：`anyllm.adapters.gemini`
+
+适配 Google Gemini generateContent API (`/v1beta/models/{model}:generateContent`)。
+
+**关键映射规则**：
+
+| UIR 结构 | Gemini 格式 |
+|----------|-------------|
+| `instructions` | `systemInstruction.parts` |
+| `Message(role="assistant")` | `contents[].role = "model"` |
+| `ToolCall` | `parts[].functionCall` |
+| `ToolResult` | `parts[].functionResponse` |
+| `generation.max_output_tokens` | `generationConfig.maxOutputTokens` |
+| `response_format=json_object` | `generationConfig.responseMimeType=application/json` |
+| `response_format=json_schema` | `generationConfig.responseSchema` |
+
+**Gemini 特有约束**：
+- provider 名建议统一注册为 `google`（`gemini` 作为网关 alias 可用）
+- endpoint model 使用 URL path 传递
+- `generateContent` 仅支持 function tools，其他 tool type 会发 warning 并忽略
+- 不支持 UIR `state` 会话字段（会发 `STATE_NOT_SUPPORTED` warning）
+
 ## 注册适配器
 
 将适配器注册到转换器或网关：

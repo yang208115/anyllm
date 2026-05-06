@@ -1,30 +1,33 @@
-# -*- coding: utf-8 -*-
 """Step 2 & 3 validation script."""
 import asyncio
 
-from anyllm.adapters.base import BaseAdapter, BaseInterceptor, ProviderCapabilities
+from anyllm.capabilities.matrix import (
+    ANTHROPIC_CAPABILITIES,
+    BEDROCK_CONVERSE_CAPABILITIES,
+    GEMINI_CAPABILITIES,
+    OLLAMA_OPENAI_COMPAT_CAPABILITIES,
+    OPENAI_CHAT_CAPABILITIES,
+)
 from anyllm.conversion.converter import UniversalConverter
 from anyllm.conversion.lowering import (
     blocks_to_plain_text,
     extract_text_from_blocks,
     serialize_tool_arguments,
 )
-from anyllm.capabilities.matrix import (
-    OPENAI_CHAT_CAPABILITIES,
-    ANTHROPIC_CAPABILITIES,
-    GEMINI_CAPABILITIES,
-    BEDROCK_CONVERSE_CAPABILITIES,
-    OLLAMA_OPENAI_COMPAT_CAPABILITIES,
-)
 from anyllm.interceptors import (
     ImageResolutionInterceptor,
     RoleConsolidationInterceptor,
 )
 from anyllm.schema import (
-    TextBlock, ImageBlock, MediaSource, ToolCall, ToolResult,
-    ToolResultBlock, ToolCallBlock,
-    Message, UniversalRequest, ModelRef,
-    ConversionWarning, ConversionResult,
+    ImageBlock,
+    MediaSource,
+    Message,
+    ModelRef,
+    TextBlock,
+    ToolCall,
+    ToolResult,
+    ToolResultBlock,
+    UniversalRequest,
 )
 
 PASS = "[OK]"
@@ -94,8 +97,8 @@ converter = UniversalConverter()
 # Should raise KeyError for unregistered provider
 try:
     converter.get_adapter("nonexistent")
-    assert False, "Should have raised KeyError"
-except KeyError as e:
+    raise AssertionError("Should have raised KeyError")
+except KeyError:
     print(f"{PASS} get_adapter raises KeyError for unknown provider")
 
 # Verify interceptor registration

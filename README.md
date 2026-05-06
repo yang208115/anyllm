@@ -141,7 +141,7 @@ request = UniversalRequest(
 ```python
 from anyllm import (
     AnyLLMGateway, ProviderConfig,
-    OpenAIChatAdapter, AnthropicAdapter,
+    OpenAIChatAdapter, AnthropicAdapter, GeminiAdapter,
     ImageResolutionInterceptor, RoleConsolidationInterceptor,
     UniversalRequest, ModelRef, Message,
 )
@@ -158,6 +158,11 @@ gateway.register_provider("anthropic", ProviderConfig(
     adapter=AnthropicAdapter(),
     api_base="https://api.anthropic.com",
     api_key="sk-ant-xxx",
+))
+gateway.register_provider("google", ProviderConfig(
+    adapter=GeminiAdapter(),
+    api_base="https://generativelanguage.googleapis.com",
+    api_key="$GOOGLE_API_KEY",
 ))
 
 # 注册拦截器
@@ -313,7 +318,8 @@ anyllm/
 ├── adapters/                   # 厂商适配器
 │   ├── base.py                 # BaseAdapter + BaseInterceptor + ProviderCapabilities
 │   ├── openai_chat.py          # OpenAI Chat Completions
-│   └── anthropic.py            # Anthropic Messages API
+│   ├── anthropic.py            # Anthropic Messages API
+│   └── gemini.py               # Google Gemini generateContent API
 ├── conversion/                 # 转换层
 │   ├── converter.py            # UniversalConverter 编排器
 │   └── lowering.py             # 降级工具函数
@@ -353,7 +359,7 @@ anyllm/
 - [x] RoleConsolidationInterceptor
 - [x] 自定义拦截器（FunctionInterceptor + @decorator）
 - [x] AnyLLMGateway 网关入口
-- [ ] Google Gemini 适配器
+- [x] Google Gemini 适配器
 - [ ] Amazon Bedrock Converse 适配器
 - [ ] Ollama OpenAI-compatible 适配器
 - [ ] OpenAI Responses API 适配器

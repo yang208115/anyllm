@@ -26,10 +26,9 @@ Block 类型一览：
 from __future__ import annotations
 
 import json
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-
+from pydantic import BaseModel, ConfigDict, Field
 
 # ---------------------------------------------------------------------------
 # MediaSource — 统一媒体来源描述符
@@ -59,10 +58,10 @@ class MediaSource(BaseModel):
       bytes   → bytes（原始字节）
     """
 
-    mime_type: Optional[str] = None
+    mime_type: str | None = None
     """MIME 类型，例如 "image/png"，base64 / bytes 时通常必填。"""
 
-    filename: Optional[str] = None
+    filename: str | None = None
     """文件名，file_id / bytes 时可选，辅助 provider 识别格式。"""
 
 
@@ -85,7 +84,7 @@ class TextBlock(BaseModel):
 
     type: Literal["text"] = "text"
     text: str
-    annotations: List[Dict[str, Any]] = Field(default_factory=list)
+    annotations: list[dict[str, Any]] = Field(default_factory=list)
     """OpenAI Responses API 返回的 annotations（引用、URL 等），其他 provider 忽略。"""
 
 
@@ -106,7 +105,7 @@ class ImageBlock(BaseModel):
 
     type: Literal["image"] = "image"
     source: MediaSource
-    detail: Optional[Literal["low", "high", "auto"]] = None
+    detail: Literal["low", "high", "auto"] | None = None
     """图片分辨率控制，OpenAI Vision 专用；其他 provider 适配器忽略。"""
 
 
@@ -124,7 +123,7 @@ class AudioBlock(BaseModel):
 
     type: Literal["audio"] = "audio"
     source: MediaSource
-    format: Optional[str] = None
+    format: str | None = None
     """音频编码格式，例如 "mp3", "wav", "opus"。"""
 
 
@@ -142,8 +141,8 @@ class FileBlock(BaseModel):
 
     type: Literal["file"] = "file"
     source: MediaSource
-    mime_type: Optional[str] = None
-    filename: Optional[str] = None
+    mime_type: str | None = None
+    filename: str | None = None
 
 
 class ThinkingBlock(BaseModel):
@@ -159,13 +158,13 @@ class ThinkingBlock(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     type: Literal["thinking"] = "thinking"
-    text: Optional[str] = None
+    text: str | None = None
     """明文推理内容（用于展示）。"""
 
-    encrypted: Optional[str] = None
+    encrypted: str | None = None
     """Anthropic 加密形式的 thinking，需原样回传给下一轮请求。"""
 
-    signature: Optional[str] = None
+    signature: str | None = None
     """Anthropic 用于验证 encrypted thinking 完整性的签名。"""
 
 
@@ -235,10 +234,10 @@ class ToolCall(BaseModel):
     若 provider 返回 JSON 字符串，适配器负责在 request_to_uir 阶段解析。
     """
 
-    raw_arguments: Optional[str] = None
+    raw_arguments: str | None = None
     """provider 返回的原始 arguments 字符串，解析失败时用于调试。"""
 
-    provider: Dict[str, Any] = Field(default_factory=dict)
+    provider: dict[str, Any] = Field(default_factory=dict)
     """厂商原始数据透传区，例如 {"raw": <原始 tool_call dict>}。"""
 
 
@@ -263,20 +262,20 @@ class ToolResult(BaseModel):
     call_id: str
     """对应 ToolCall.id，用于关联调用与结果。"""
 
-    content: List[ContentBlock]
+    content: list[ContentBlock]
     """
     工具结果内容，通常为 [TextBlock(text="...")]，
     也可包含 ImageBlock（富文本结果）。
     ToolResultBlock / ToolResult 不允许嵌套 ToolCallBlock / ToolResultBlock。
     """
 
-    name: Optional[str] = None
+    name: str | None = None
     """工具名称，Gemini functionResponse 需要此字段。"""
 
     is_error: bool = False
     """标记工具执行是否出错，Anthropic tool_result 原生支持此字段。"""
 
-    provider: Dict[str, Any] = Field(default_factory=dict)
+    provider: dict[str, Any] = Field(default_factory=dict)
     """厂商原始数据透传区。"""
 
 
@@ -325,17 +324,7 @@ class ToolResultBlock(BaseModel):
 # ---------------------------------------------------------------------------
 
 ContentBlock = Annotated[
-    Union[
-        TextBlock,
-        ImageBlock,
-        AudioBlock,
-        FileBlock,
-        ThinkingBlock,
-        RefusalBlock,
-        ToolCallBlock,
-        ToolResultBlock,
-        ProviderBlock,
-    ],
+    TextBlock | ImageBlock | AudioBlock | FileBlock | ThinkingBlock | RefusalBlock | ToolCallBlock | ToolResultBlock | ProviderBlock,
     Field(discriminator="type"),
 ]
 """
@@ -363,7 +352,7 @@ ToolResultBlock.model_rebuild()
 
 def parse_tool_arguments(
     value: Any,
-) -> tuple[Any, Optional[str], Optional[str]]:
+) -> tuple[Any, str | None, str | None]:
     """
     规范化 tool_call arguments。
 

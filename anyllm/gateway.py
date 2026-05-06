@@ -53,9 +53,11 @@ AnyLLMGateway — 网关入口（PRD §13 + 用户需求 Step 5）。
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from anyllm.adapters.base import BaseAdapter, BaseInterceptor, ProviderCapabilities
+from anyllm.adapters.base import BaseAdapter, BaseInterceptor
 from anyllm.conversion.converter import UniversalConverter
 from anyllm.schema.request import UniversalRequest
 from anyllm.schema.response import UniversalResponse
@@ -83,9 +85,9 @@ class ProviderConfig:
     def __init__(
         self,
         adapter: BaseAdapter,
-        api_base: Optional[str] = None,
-        api_key: Optional[str] = None,
-        default_headers: Optional[Dict[str, str]] = None,
+        api_base: str | None = None,
+        api_key: str | None = None,
+        default_headers: dict[str, str] | None = None,
         timeout: float = 60.0,
     ) -> None:
         """
@@ -122,10 +124,10 @@ class GatewayResult:
     def __init__(
         self,
         response: UniversalResponse,
-        warnings: List[ConversionWarning],
+        warnings: list[ConversionWarning],
         provider: str,
-        raw_request: Optional[Dict[str, Any]] = None,
-        raw_response: Optional[Dict[str, Any]] = None,
+        raw_request: dict[str, Any] | None = None,
+        raw_response: dict[str, Any] | None = None,
     ) -> None:
         self.response = response
         self.warnings = warnings
@@ -184,11 +186,11 @@ class AnyLLMGateway:
 
     def __init__(self) -> None:
         # provider 配置字典，键为 provider 标识符
-        self._providers: Dict[str, ProviderConfig] = {}
+        self._providers: dict[str, ProviderConfig] = {}
         # 内部转换器（管理适配器和拦截器）
         self._converter = UniversalConverter()
         # provider 路由策略（可自定义）
-        self._router: Optional[Callable[[UniversalRequest], str]] = None
+        self._router: Callable[[UniversalRequest], str] | None = None
 
     # ------------------------------------------------------------------
     # 注册
@@ -215,7 +217,7 @@ class AnyLLMGateway:
         self,
         interceptor_or_fn: BaseInterceptor,
         *,
-        position: Optional[int] = None,
+        position: int | None = None,
     ) -> None:
         """
         注册一个拦截器。
@@ -255,18 +257,24 @@ class AnyLLMGateway:
         self._router = router
 
     @property
-    def registered_providers(self) -> List[str]:
+    def registered_providers(self) -> list[str]:
         """返回所有已注册的 provider 标识符列表。"""
         return list(self._providers.keys())
 
     @property
-    def registered_interceptors(self) -> List[str]:
+    def registered_interceptors(self) -> list[str]:
         """返回所有已注册的拦截器名称列表（按执行顺序）。"""
         return self._converter.registered_interceptors
 
     # ------------------------------------------------------------------
     # 路由
     # ------------------------------------------------------------------
+
+    def _canonicalize_provider(self, provider: str) -> str:
+        provider_aliases = {
+            "gemini": "google",
+        }
+        return provider_aliases.get(provider, provider)
 
     def _resolve_provider(self, request: UniversalRequest) -> str:
         """
@@ -293,12 +301,13 @@ class AnyLLMGateway:
         # 优先级 2：model.provider 字段
         model_provider = request.model.provider
         if model_provider != "unknown":
+            canonical_provider = self._canonicalize_provider(model_provider)
             # 精确匹配
-            if model_provider in self._providers:
-                return model_provider
+            if canonical_provider in self._providers:
+                return canonical_provider
             # 模糊匹配（例如 "openai" 匹配 "openai_chat"）
             for name in self._providers:
-                if name.startswith(model_provider):
+                if name.startswith(canonical_provider):
                     return name
 
         # 优先级 3：从模型名称推断
@@ -335,8 +344,8 @@ class AnyLLMGateway:
         self,
         request: UniversalRequest,
         *,
-        provider: Optional[str] = None,
-        http_client: Optional[Any] = None,
+        provider: str | None = None,
+        http_client: Any | None = None,
     ) -> GatewayResult:
         """
         执行完整的聊天补全请求链路。
@@ -357,10 +366,10 @@ class AnyLLMGateway:
         Returns:
             GatewayResult，包含 UIR 响应和所有警告。
         """
-        all_warnings: List[ConversionWarning] = []
+        all_warnings: list[ConversionWarning] = []
 
         # ---- 步骤 1：路由 ----
-        target = provider or self._resolve_provider(request)
+        target = self._canonicalize_provider(provider) if provider else self._resolve_provider(request)
         config = self._providers[target]
         logger.info("路由到 provider: '%s' (model=%s)", target, request.model.name)
 
@@ -393,8 +402,8 @@ class AnyLLMGateway:
         self,
         request: UniversalRequest,
         *,
-        target_provider: Optional[str] = None,
-    ) -> ConversionResult[Dict[str, Any]]:
+        target_provider: str | None = None,
+    ) -> ConversionResult[dict[str, Any]]:
         """
         只做格式转换（UIR → provider dict），不调用 API。
 
@@ -410,7 +419,7 @@ class AnyLLMGateway:
         Returns:
             ConversionResult[dict]，包含 provider 请求 dict 和所有警告。
         """
-        target = target_provider or self._resolve_provider(request)
+        target = self._canonicalize_provider(target_provider) if target_provider else self._resolve_provider(request)
 
         # 执行拦截器管道
         processed = await self._converter.run_interceptors(request, target)
@@ -425,9 +434,9 @@ class AnyLLMGateway:
     async def _call_provider_api(
         self,
         config: ProviderConfig,
-        raw_request: Dict[str, Any],
-        http_client: Optional[Any] = None,
-    ) -> Dict[str, Any]:
+        raw_request: dict[str, Any],
+        http_client: Any | None = None,
+    ) -> dict[str, Any]:
         """
         调用 provider 的 HTTP API。
 
@@ -452,24 +461,28 @@ class AnyLLMGateway:
         """
         try:
             import httpx
-        except ImportError:
+        except ImportError as err:
             raise ImportError(
                 "httpx 是调用 provider API 的必要依赖，"
                 "请安装: pip install httpx"
-            )
+            ) from err
 
         # 构造请求 URL 和 headers
-        url, headers = self._build_request_params(config)
+        url, headers = self._build_request_params(config, raw_request)
+
+        payload = raw_request
+        if "google" in config.adapter.provider_name and "model" in raw_request:
+            payload = {k: v for k, v in raw_request.items() if k != "model"}
 
         # 使用外部客户端或创建新的
         if http_client is not None:
             response = await http_client.post(
-                url, json=raw_request, headers=headers
+                url, json=payload, headers=headers
             )
         else:
             async with httpx.AsyncClient(timeout=config.timeout) as client:
                 response = await client.post(
-                    url, json=raw_request, headers=headers
+                    url, json=payload, headers=headers
                 )
 
         response.raise_for_status()
@@ -478,7 +491,8 @@ class AnyLLMGateway:
     def _build_request_params(
         self,
         config: ProviderConfig,
-    ) -> tuple[str, Dict[str, str]]:
+        raw_request: dict[str, Any],
+    ) -> tuple[str, dict[str, str]]:
         """
         根据 provider 配置构造请求 URL 和 headers。
 
@@ -511,10 +525,13 @@ class AnyLLMGateway:
         elif "google" in provider_name:
             # Gemini API
             base = (config.api_base or "https://generativelanguage.googleapis.com").rstrip("/")
-            model = "gemini-1.5-pro"  # 从请求中提取更好，这里是兜底
+            model = raw_request.get("model") or "gemini-1.5-pro"
             url = f"{base}/v1beta/models/{model}:generateContent"
             if config.api_key:
-                url += f"?key={config.api_key}"
+                parsed = urlsplit(url)
+                query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+                query["key"] = config.api_key
+                url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), parsed.fragment))
 
         else:
             # 通用兜底

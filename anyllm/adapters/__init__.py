@@ -11,9 +11,10 @@ AnyLLM 厂商适配器包。
   AnthropicAdapter     — Anthropic Messages API
 """
 
-from anyllm.adapters.base import BaseAdapter, BaseInterceptor, ProviderCapabilities
-from anyllm.adapters.openai_chat import OpenAIChatAdapter
 from anyllm.adapters.anthropic import AnthropicAdapter
+from anyllm.adapters.base import BaseAdapter, BaseInterceptor, ProviderCapabilities
+from anyllm.adapters.gemini import GeminiAdapter
+from anyllm.adapters.openai_chat import OpenAIChatAdapter
 
 __all__ = [
     "BaseAdapter",
@@ -21,4 +22,5 @@ __all__ = [
     "ProviderCapabilities",
     "OpenAIChatAdapter",
     "AnthropicAdapter",
+    "GeminiAdapter",
 ]

@@ -49,9 +49,8 @@ OpenAI Chat Completions 适配器（PRD §15）。
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from anyllm.adapters.base import BaseAdapter, ProviderCapabilities
 from anyllm.capabilities.matrix import OPENAI_CHAT_CAPABILITIES
@@ -60,9 +59,7 @@ from anyllm.conversion.lowering import (
     serialize_tool_arguments,
 )
 from anyllm.schema.content import (
-    AudioBlock,
     ContentBlock,
-    FileBlock,
     ImageBlock,
     MediaSource,
     ProviderBlock,
@@ -77,7 +74,6 @@ from anyllm.schema.content import (
 )
 from anyllm.schema.message import Message
 from anyllm.schema.request import (
-    ConversationState,
     GenerationConfig,
     ModelRef,
     UniversalRequest,
@@ -132,7 +128,7 @@ class OpenAIChatAdapter(BaseAdapter):
 
     def request_to_uir(
         self,
-        raw_request: Dict[str, Any],
+        raw_request: dict[str, Any],
     ) -> ConversionResult[UniversalRequest]:
         """
         将 OpenAI Chat Completions 原始请求转换为 UIR。
@@ -144,9 +140,9 @@ class OpenAIChatAdapter(BaseAdapter):
           - tool_calls → Message.tool_calls（arguments JSON 字符串解析为 dict）
           - role=tool 消息 → Message(role="tool", tool_results=[...])
         """
-        warnings: List[ConversionWarning] = []
-        messages: List[Message] = []
-        instructions: List[ContentBlock] = []
+        warnings: list[ConversionWarning] = []
+        messages: list[Message] = []
+        instructions: list[ContentBlock] = []
 
         # ---- 解析 messages ----
         for idx, msg in enumerate(raw_request.get("messages", [])):
@@ -164,7 +160,7 @@ class OpenAIChatAdapter(BaseAdapter):
                 continue
 
             # 解析 tool_calls（assistant 消息可能携带）
-            tool_calls: List[ToolCall] = []
+            tool_calls: list[ToolCall] = []
             for tc_idx, tc in enumerate(msg.get("tool_calls") or []):
                 fn = tc.get("function", {})
                 # OpenAI 的 arguments 是 JSON 字符串，需要解析为 dict
@@ -186,7 +182,7 @@ class OpenAIChatAdapter(BaseAdapter):
                 ))
 
             # 解析 tool 角色消息的 tool_call_id → ToolResult
-            tool_results: List[ToolResult] = []
+            tool_results: list[ToolResult] = []
             if role == "tool" and "tool_call_id" in msg:
                 tool_results.append(ToolResult(
                     call_id=msg["tool_call_id"],
@@ -263,7 +259,7 @@ class OpenAIChatAdapter(BaseAdapter):
 
     def response_to_uir(
         self,
-        raw_response: Dict[str, Any],
+        raw_response: dict[str, Any],
     ) -> ConversionResult[UniversalResponse]:
         """
         将 OpenAI Chat Completions 原始响应转换为 UIR。
@@ -274,8 +270,8 @@ class OpenAIChatAdapter(BaseAdapter):
           - usage → UIR Usage
           - tool_calls → Message.tool_calls
         """
-        warnings: List[ConversionWarning] = []
-        output: List[Message] = []
+        warnings: list[ConversionWarning] = []
+        output: list[Message] = []
 
         for choice in raw_response.get("choices", []):
             msg = choice.get("message", {})
@@ -290,7 +286,7 @@ class OpenAIChatAdapter(BaseAdapter):
                 content.append(RefusalBlock(text=msg["refusal"]))
 
             # 解析 tool_calls
-            tool_calls: List[ToolCall] = []
+            tool_calls: list[ToolCall] = []
             for tc in msg.get("tool_calls") or []:
                 fn = tc.get("function", {})
                 args, raw_args, warn_code = parse_tool_arguments(
@@ -347,7 +343,7 @@ class OpenAIChatAdapter(BaseAdapter):
     def uir_to_request(
         self,
         request: UniversalRequest,
-    ) -> ConversionResult[Dict[str, Any]]:
+    ) -> ConversionResult[dict[str, Any]]:
         """
         将 UIR 转换为 OpenAI Chat Completions 请求格式。
 
@@ -358,8 +354,8 @@ class OpenAIChatAdapter(BaseAdapter):
           - ToolCallBlock in content → 提取到消息顶层 tool_calls
           - ImageBlock → image_url 格式（支持 url 和 data URI base64）
         """
-        warnings: List[ConversionWarning] = []
-        messages: List[Dict[str, Any]] = []
+        warnings: list[ConversionWarning] = []
+        messages: list[dict[str, Any]] = []
 
         # ---- instructions → system 消息 ----
         if request.instructions:
@@ -380,7 +376,7 @@ class OpenAIChatAdapter(BaseAdapter):
                 msg.content, warnings, f"{path}.content"
             )
 
-            out: Dict[str, Any] = {
+            out: dict[str, Any] = {
                 "role": role,
                 "content": openai_content,
             }
@@ -430,7 +426,7 @@ class OpenAIChatAdapter(BaseAdapter):
             messages.append(out)
 
         # ---- 组装最终请求 ----
-        raw: Dict[str, Any] = {
+        raw: dict[str, Any] = {
             "model": request.model.name,
             "messages": messages,
         }
@@ -481,9 +477,9 @@ class OpenAIChatAdapter(BaseAdapter):
     def uir_to_response(
         self,
         response: UniversalResponse,
-    ) -> ConversionResult[Dict[str, Any]]:
+    ) -> ConversionResult[dict[str, Any]]:
         """将 UIR 响应转换回 OpenAI Chat Completions 响应格式。"""
-        warnings: List[ConversionWarning] = []
+        warnings: list[ConversionWarning] = []
 
         # 映射 stop_reason 回 OpenAI 格式
         stop_reason_map = {
@@ -496,7 +492,7 @@ class OpenAIChatAdapter(BaseAdapter):
 
         choices = []
         for i, msg in enumerate(response.output):
-            choice_msg: Dict[str, Any] = {
+            choice_msg: dict[str, Any] = {
                 "role": msg.role,
                 "content": self._blocks_to_openai_content(
                     msg.content, warnings, f"output[{i}].content"
@@ -524,9 +520,13 @@ class OpenAIChatAdapter(BaseAdapter):
 
             # content 如果只有一个 TextBlock，简化为字符串
             content = choice_msg["content"]
-            if isinstance(content, list) and len(content) == 1:
-                if isinstance(content[0], dict) and content[0].get("type") == "text":
-                    choice_msg["content"] = content[0]["text"]
+            if (
+                isinstance(content, list)
+                and len(content) == 1
+                and isinstance(content[0], dict)
+                and content[0].get("type") == "text"
+            ):
+                choice_msg["content"] = content[0]["text"]
 
             choices.append({
                 "index": i,
@@ -534,7 +534,7 @@ class OpenAIChatAdapter(BaseAdapter):
                 "finish_reason": finish_reason,
             })
 
-        raw: Dict[str, Any] = {
+        raw: dict[str, Any] = {
             "id": response.id or "",
             "object": "chat.completion",
             "model": response.model or "",
@@ -557,9 +557,9 @@ class OpenAIChatAdapter(BaseAdapter):
     def _parse_content(
         self,
         content: Any,
-        warnings: List[ConversionWarning],
+        warnings: list[ConversionWarning],
         path: str,
-    ) -> List[ContentBlock]:
+    ) -> list[ContentBlock]:
         """
         解析 OpenAI 的 content 字段。
 
@@ -575,7 +575,7 @@ class OpenAIChatAdapter(BaseAdapter):
             return [TextBlock(text=content)] if content else []
 
         if isinstance(content, list):
-            blocks: List[ContentBlock] = []
+            blocks: list[ContentBlock] = []
             for i, part in enumerate(content):
                 part_type = part.get("type", "")
                 part_path = f"{path}[{i}]"
@@ -628,8 +628,8 @@ class OpenAIChatAdapter(BaseAdapter):
 
     def _parse_tool_def(
         self,
-        tool: Dict[str, Any],
-        warnings: List[ConversionWarning],
+        tool: dict[str, Any],
+        warnings: list[ConversionWarning],
         path: str,
     ) -> ToolDef:
         """解析 OpenAI tools[] 元素为 UIR ToolDef。"""
@@ -645,8 +645,8 @@ class OpenAIChatAdapter(BaseAdapter):
     def _parse_tool_choice(
         self,
         raw: Any,
-        warnings: List[ConversionWarning],
-    ) -> Optional[ToolChoice]:
+        warnings: list[ConversionWarning],
+    ) -> ToolChoice | None:
         """
         解析 OpenAI tool_choice 字段。
 
@@ -674,8 +674,8 @@ class OpenAIChatAdapter(BaseAdapter):
     def _parse_response_format(
         self,
         raw: Any,
-        warnings: List[ConversionWarning],
-    ) -> Optional[ResponseFormat]:
+        warnings: list[ConversionWarning],
+    ) -> ResponseFormat | None:
         """
         解析 OpenAI response_format 字段。
 
@@ -708,7 +708,7 @@ class OpenAIChatAdapter(BaseAdapter):
     def _map_role_to_openai(
         self,
         role: str,
-        warnings: List[ConversionWarning],
+        warnings: list[ConversionWarning],
         path: str,
     ) -> str:
         """
@@ -733,8 +733,8 @@ class OpenAIChatAdapter(BaseAdapter):
 
     def _blocks_to_openai_content(
         self,
-        blocks: List[ContentBlock],
-        warnings: List[ConversionWarning],
+        blocks: list[ContentBlock],
+        warnings: list[ConversionWarning],
         path: str,
     ) -> Any:
         """
@@ -763,7 +763,7 @@ class OpenAIChatAdapter(BaseAdapter):
             return displayable[0].text
 
         # 多个 block → 返回 content parts 数组
-        parts: List[Dict[str, Any]] = []
+        parts: list[dict[str, Any]] = []
         for i, block in enumerate(displayable):
             block_path = f"{path}[{i}]"
 
@@ -811,7 +811,7 @@ class OpenAIChatAdapter(BaseAdapter):
 
         return parts
 
-    def _image_to_openai(self, block: ImageBlock) -> Dict[str, Any]:
+    def _image_to_openai(self, block: ImageBlock) -> dict[str, Any]:
         """
         将 ImageBlock 转换为 OpenAI image_url 格式。
 
@@ -829,7 +829,7 @@ class OpenAIChatAdapter(BaseAdapter):
             # file_id / bytes → 降级为占位文本
             url = f"[Image: {block.source.kind}]"
 
-        result: Dict[str, Any] = {
+        result: dict[str, Any] = {
             "type": "image_url",
             "image_url": {"url": url},
         }
@@ -837,9 +837,9 @@ class OpenAIChatAdapter(BaseAdapter):
             result["image_url"]["detail"] = block.detail
         return result
 
-    def _tool_def_to_openai(self, tool: ToolDef) -> Dict[str, Any]:
+    def _tool_def_to_openai(self, tool: ToolDef) -> dict[str, Any]:
         """将 UIR ToolDef 转换为 OpenAI tools[] 元素。"""
-        fn: Dict[str, Any] = {
+        fn: dict[str, Any] = {
             "name": tool.name,
         }
         if tool.description:
@@ -855,7 +855,7 @@ class OpenAIChatAdapter(BaseAdapter):
     def _tool_choice_to_openai(
         self,
         choice: ToolChoice,
-        warnings: List[ConversionWarning],
+        warnings: list[ConversionWarning],
     ) -> Any:
         """
         将 UIR ToolChoice 转换为 OpenAI tool_choice 字段。
@@ -882,8 +882,8 @@ class OpenAIChatAdapter(BaseAdapter):
     def _response_format_to_openai(
         self,
         fmt: ResponseFormat,
-        warnings: List[ConversionWarning],
-    ) -> Dict[str, Any]:
+        warnings: list[ConversionWarning],
+    ) -> dict[str, Any]:
         """将 UIR ResponseFormat 转换为 OpenAI response_format 字段。"""
         if isinstance(fmt, TextResponseFormat):
             return {"type": "text"}
@@ -902,7 +902,7 @@ class OpenAIChatAdapter(BaseAdapter):
 
     def _apply_generation_config(
         self,
-        raw: Dict[str, Any],
+        raw: dict[str, Any],
         gen: GenerationConfig,
     ) -> None:
         """将 UIR GenerationConfig 映射到 OpenAI 请求的顶层字段。"""

@@ -5,13 +5,25 @@ UIR (Universal AI Message IR) 版本: uai.v1
                Anthropic, Google Gemini, Amazon Bedrock, Ollama, Cloudflare Workers AI
 """
 
+from anyllm.adapters.anthropic import AnthropicAdapter
+from anyllm.adapters.base import BaseAdapter, BaseInterceptor, ProviderCapabilities
+from anyllm.adapters.gemini import GeminiAdapter
+from anyllm.adapters.openai_chat import OpenAIChatAdapter
+from anyllm.conversion.converter import UniversalConverter
+from anyllm.gateway import AnyLLMGateway, GatewayResult, ProviderConfig
+from anyllm.interceptors import (
+    FunctionInterceptor,
+    ImageResolutionInterceptor,
+    RoleConsolidationInterceptor,
+    interceptor,
+)
 from anyllm.schema import (
     AudioBlock,
     AutoToolChoice,
     ContentBlock,
+    ConversationState,
     ConversionResult,
     ConversionWarning,
-    ConversationState,
     FileBlock,
     GenerationConfig,
     ImageBlock,
@@ -46,18 +58,6 @@ from anyllm.schema import (
     parse_tool_arguments,
 )
 
-from anyllm.adapters.base import BaseAdapter, BaseInterceptor, ProviderCapabilities
-from anyllm.adapters.openai_chat import OpenAIChatAdapter
-from anyllm.adapters.anthropic import AnthropicAdapter
-from anyllm.conversion.converter import UniversalConverter
-from anyllm.interceptors import (
-    FunctionInterceptor,
-    ImageResolutionInterceptor,
-    RoleConsolidationInterceptor,
-    interceptor,
-)
-from anyllm.gateway import AnyLLMGateway, GatewayResult, ProviderConfig
-
 __version__ = "0.1.0"
 
 __all__ = [
@@ -74,6 +74,7 @@ __all__ = [
     "ProviderCapabilities",
     "OpenAIChatAdapter",
     "AnthropicAdapter",
+    "GeminiAdapter",
     # interceptors
     "ImageResolutionInterceptor",
     "RoleConsolidationInterceptor",

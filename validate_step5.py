@@ -1,28 +1,25 @@
-# -*- coding: utf-8 -*-
 """Step 5 validation - AnyLLMGateway full integration test."""
 import asyncio
-import json
 
+import anyllm
 from anyllm import (
-    AnyLLMGateway,
-    ProviderConfig,
-    OpenAIChatAdapter,
     AnthropicAdapter,
-    ImageResolutionInterceptor,
-    RoleConsolidationInterceptor,
-    FunctionInterceptor,
-    interceptor,
-    UniversalRequest,
-    ModelRef,
-    Message,
-    TextBlock,
-    ImageBlock,
-    MediaSource,
-    ToolCall,
-    ToolResult,
-    ToolDef,
+    AnyLLMGateway,
     AutoToolChoice,
+    GeminiAdapter,
     GenerationConfig,
+    ImageResolutionInterceptor,
+    Message,
+    ModelRef,
+    OpenAIChatAdapter,
+    ProviderConfig,
+    RoleConsolidationInterceptor,
+    TextBlock,
+    ToolCall,
+    ToolDef,
+    ToolResult,
+    UniversalRequest,
+    interceptor,
 )
 
 PASS = "[OK]"
@@ -48,11 +45,16 @@ gateway.register_provider("anthropic", ProviderConfig(
     api_base="https://api.anthropic.com",
     api_key="sk-ant-test-key",
 ))
+gateway.register_provider("google", ProviderConfig(
+    adapter=GeminiAdapter(),
+    api_base="https://generativelanguage.googleapis.com",
+    api_key="g-test-key",
+))
 
 gateway.register_interceptor(ImageResolutionInterceptor())
 gateway.register_interceptor(RoleConsolidationInterceptor())
 
-assert gateway.registered_providers == ["openai_chat", "anthropic"]
+assert gateway.registered_providers == ["openai_chat", "anthropic", "google"]
 assert gateway.registered_interceptors == ["image_resolution", "role_consolidation"]
 print(f"{PASS} Providers: {gateway.registered_providers}")
 print(f"{PASS} Interceptors: {gateway.registered_interceptors}")
@@ -95,6 +97,23 @@ req_gpt = UniversalRequest(
 provider4 = gateway._resolve_provider(req_gpt)
 assert provider4 == "openai_chat"
 print(f"{PASS} Model name 'gpt-4o-mini' -> '{provider4}'")
+
+req_gemini = UniversalRequest(
+    model=ModelRef(name="gemini-1.5-flash"),
+    messages=[Message.user_text("Hi")],
+)
+provider5 = gateway._resolve_provider(req_gemini)
+assert provider5 == "google"
+print(f"{PASS} Model name 'gemini-1.5-flash' -> '{provider5}'")
+
+# provider alias path should also work when explicitly passed to gateway APIs
+req_gemini_provider = UniversalRequest(
+    model=ModelRef(provider="google", name="gemini-1.5-flash"),
+    messages=[Message.user_text("Hi")],
+)
+provider6 = gateway._resolve_provider(req_gemini_provider)
+assert provider6 == "google"
+print(f"{PASS} ModelRef(provider='google') -> '{provider6}'")
 
 # ==================================================================
 # 3. Custom router
@@ -265,9 +284,81 @@ async def test_convert_only():
 asyncio.run(test_convert_only())
 
 # ==================================================================
-# 5. Custom interceptor with gateway
+# 5. Google URL model routing
 # ==================================================================
-print("\n--- 5. Custom interceptor with gateway ---")
+print("\n--- 5. Google URL model routing ---")
+
+def test_google_url_model_routing():
+    google_config = ProviderConfig(
+        adapter=GeminiAdapter(),
+        api_base="https://generativelanguage.googleapis.com",
+        api_key="g-test-key",
+    )
+    raw_req = {
+        "model": "gemini-1.5-flash",
+        "contents": [{"role": "user", "parts": [{"text": "hello"}]}],
+    }
+    url, headers = gateway._build_request_params(google_config, raw_req)
+    assert "gemini-1.5-flash" in url
+    assert url.startswith("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent")
+    assert "key=g-test-key" in url
+    assert headers["Content-Type"] == "application/json"
+    print(f"  {PASS} Google URL uses request model: {url}")
+
+    # Ensure key is appended correctly when base already has query
+    google_config_q = ProviderConfig(
+        adapter=GeminiAdapter(),
+        api_base="https://generativelanguage.googleapis.com?x=1",
+        api_key="g-test-key",
+    )
+    url_q, _ = gateway._build_request_params(google_config_q, raw_req)
+    assert "x=1" in url_q and "key=g-test-key" in url_q
+    print(f"  {PASS} Google URL query merge keeps existing params")
+
+    # Simulate chat_completions send path: payload should not duplicate model in body
+    class DummyResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "responseId": "resp_dummy",
+                "modelVersion": "gemini-1.5-flash",
+                "candidates": [{"content": {"role": "model", "parts": [{"text": "ok"}]}, "finishReason": "STOP"}],
+            }
+
+    class DummyClient:
+        def __init__(self):
+            self.last_json = None
+            self.last_url = None
+
+        async def post(self, url, json, headers):
+            self.last_url = url
+            self.last_json = json
+            return DummyResponse()
+
+    client = DummyClient()
+    asyncio.run(gateway._call_provider_api(google_config, raw_req, http_client=client))
+    assert client.last_json is not None
+    assert "model" not in client.last_json
+    assert "gemini-1.5-flash" in client.last_url
+    print(f"  {PASS} Google send payload excludes model while URL keeps model")
+
+    # provider alias input should canonicalize to google in gateway APIs
+    alias_req = UniversalRequest(
+        model=ModelRef(provider="google", name="gemini-1.5-flash"),
+        messages=[Message.user_text("hi")],
+    )
+    alias_out = asyncio.run(gateway.convert_only(alias_req, target_provider="gemini")).value
+    assert "contents" in alias_out
+    print(f"  {PASS} target_provider='gemini' alias routes to google adapter")
+
+test_google_url_model_routing()
+
+# ==================================================================
+# 6. Custom interceptor with gateway
+# ==================================================================
+print("\n--- 6. Custom interceptor with gateway ---")
 
 async def test_custom_interceptor():
     gw = AnyLLMGateway()
@@ -307,10 +398,10 @@ async def test_custom_interceptor():
 asyncio.run(test_custom_interceptor())
 
 # ==================================================================
-# 6. Full import test
+# 7. Full import test
 # ==================================================================
-print("\n--- 6. Full import test ---")
-import anyllm
+print("\n--- 7. Full import test ---")
+
 assert hasattr(anyllm, 'AnyLLMGateway')
 assert hasattr(anyllm, 'UniversalConverter')
 assert hasattr(anyllm, 'OpenAIChatAdapter')
